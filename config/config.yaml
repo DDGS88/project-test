@@ -1,0 +1,33 @@
+server:
+  port: 9200
+  read_timeout: 30s
+  write_timeout: 30s
+
+# 业务数据库（渠道 / 模型查询）
+database:
+  driver: "mysql"                   # mysql 或 postgres
+  dsn: "root:123456@tcp(127.0.0.1:3306)/new-api?parseTime=true"
+  max_open_conns: 10
+  max_idle_conns: 5
+
+# 告警平台数据库（告警规则存储 + 日志查询）
+log_database:
+  driver: "postgres"
+  dsn: "postgresql://root:postgres@127.0.0.1:5432/new_api?sslmode=disable"
+  max_open_conns: 10
+  max_idle_conns: 5
+
+engine:
+  poll_interval: 30s
+  rule_reload_interval: 60s
+  default_window_sec: 300
+  default_cooldown_sec: 600
+  checkpoint_file: "data/checkpoint.json"
+
+logging:
+  level: "info"
+  format: "json"
+
+auth:
+  jwt_secret: "tt-inspector-jwt-secret-change-me"   # 生产环境请更换
+  admin_password: "AIGateway@2026!Admin"              # 生产环境请更换

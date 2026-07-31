@@ -1,0 +1,18 @@
+services:
+  tt-inspector:
+    build: .
+    container_name: tt-inspector
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./config/config.yaml:/app/config/config.yaml:ro
+      - ./data:/app/data
+    networks:
+      - tt-network
+
+networks:
+  tt-network:
+    driver: bridge
