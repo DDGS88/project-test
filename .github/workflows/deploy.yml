@@ -6,16 +6,11 @@ on:
       - develop
       - main
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout code
@@ -25,12 +20,12 @@ jobs:
         id: env
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "ENV=prod" >> $GITHUB_OUTPUT
-            echo "TAG=prod-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            ENV_NAME="prod"
           else
-            echo "ENV=dev" >> $GITHUB_OUTPUT
-            echo "TAG=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+            ENV_NAME="dev"
           fi
+          echo "ENV=$ENV_NAME" >> $GITHUB_OUTPUT
+          echo "TAG=${ENV_NAME}-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Select environment config
         run: |
@@ -40,25 +35,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Docker image
+        run: |
+          docker build -t tt-inspector:${{ steps.env.outputs.TAG }} .
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.TAG }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.ENV }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Save image as tar
+        run: |
+          docker save -o tt-inspector.tar tt-inspector:${{ steps.env.outputs.TAG }}
 
       # ── 部署到开发服务器（develop 分支） ──
+
+      - name: Copy image to Dev server
+        if: github.ref == 'refs/heads/develop'
+        uses: appleboy/scp-action@v0
+        with:
+          host: 43.156.153.171
+          port: 36000
+          username: root
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          source: "tt-inspector.tar"
+          target: "/opt/tt-inspector/"
+
       - name: Deploy to Dev server
         if: github.ref == 'refs/heads/develop'
         uses: appleboy/ssh-action@v1
@@ -69,10 +66,11 @@ jobs:
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
             mkdir -p /opt/tt-inspector/data
+            docker load -i /opt/tt-inspector/tt-inspector.tar
             cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
             services:
               tt-inspector:
-                image: ${IMAGE}:${TAG}
+                image: tt-inspector:${{ steps.env.outputs.TAG }}
                 container_name: tt-inspector
                 restart: unless-stopped
                 ports:
@@ -89,12 +87,23 @@ jobs:
                 driver: bridge
             COMPOSE_EOF
             cd /opt/tt-inspector
-            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
-              docker compose -f docker-compose.deploy.yaml pull
-            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
-              docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            # 清理旧镜像，保留最新
+            docker image prune -f
 
       # ── 部署到生产服务器（main 分支） ──
+
+      - name: Copy image to Prod server
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/scp-action@v0
+        with:
+          host: 43.156.153.171
+          port: 36000
+          username: root
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          source: "tt-inspector.tar"
+          target: "/opt/tt-inspector/"
+
       - name: Deploy to Prod server
         if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v1
@@ -105,10 +114,11 @@ jobs:
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
             mkdir -p /opt/tt-inspector/data
+            docker load -i /opt/tt-inspector/tt-inspector.tar
             cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
             services:
               tt-inspector:
-                image: ${IMAGE}:${TAG}
+                image: tt-inspector:${{ steps.env.outputs.TAG }}
                 container_name: tt-inspector
                 restart: unless-stopped
                 ports:
@@ -125,7 +135,5 @@ jobs:
                 driver: bridge
             COMPOSE_EOF
             cd /opt/tt-inspector
-            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
-              docker compose -f docker-compose.deploy.yaml pull
-            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
-              docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            docker image prune -f
