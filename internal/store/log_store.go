@@ -331,10 +331,10 @@ type OverviewStats struct {
 	ActiveRules     int64   `json:"active_rules"`
 }
 
-// GetOverviewStats 获取最近 24 小时错误日志概览统计
-func (s *LogStore) GetOverviewStats(rulePatterns []string) (*OverviewStats, error) {
+// GetOverviewStats 获取指定时间窗口内错误日志概览统计
+func (s *LogStore) GetOverviewStats(rulePatterns []string, windowHours int) (*OverviewStats, error) {
 	stats := &OverviewStats{}
-	since := time.Now().Add(-24 * time.Hour).Unix()
+	since := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
 
 	// 总 type=5 错误数
 	if err := s.db.Model(&model.Log{}).
@@ -391,10 +391,10 @@ func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int) ([
 		Where("created_at >= ?", since).
 		Where("content != ''")
 
-	// 排除已匹配的 pattern（逐个 NOT REGEXP）
+	// 排除已匹配的 pattern（逐个 NOT REGEXP / !~*）
 	for _, pattern := range rulePatterns {
 		if pattern != "" {
-			query = query.Where("content NOT "+s.regexOp+" ?", pattern)
+			query = query.Where("content "+s.negateOp()+" ?", pattern)
 		}
 	}
 

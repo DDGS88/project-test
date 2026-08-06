@@ -21,6 +21,7 @@ import {
   classifyLog,
   listClassifyRules,
   createClassifyRule,
+  updateClassifyRule,
   deleteClassifyRule,
 } from '../api/rules';
 import type {
@@ -207,10 +208,11 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [thresholdInput, setThresholdInput] = useState(10);
 
   // Poll interval state
-  const [pollIntervalSeconds, setPollIntervalSeconds] = useState(60);
+  const [pollIntervalSeconds, setPollIntervalSeconds] = useState(300);
 
   // Overview stats state
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
+  const [overviewWindow, setOverviewWindow] = useState(24);
 
   // Unmatched samples state
   const [unmatchedSamples, setUnmatchedSamples] = useState<UnmatchedSample[]>([]);
@@ -236,6 +238,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [newClassifySubCategory, setNewClassifySubCategory] = useState('');
   const [newClassifyRecommendation, setNewClassifyRecommendation] = useState('');
   const [newClassifyPriority, setNewClassifyPriority] = useState(50);
+  const [editingClassifyRule, setEditingClassifyRule] = useState<ClassifyRule | null>(null);
 
   useEffect(() => {
     getErrorScanPollInterval().then(setPollIntervalSeconds).catch(() => {});
@@ -243,7 +246,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Load overview stats
   const loadOverviewStats = () => {
-    getOverviewStats()
+    getOverviewStats(overviewWindow)
       .then(setOverviewStats)
       .catch((err) => {
         onShowToast(`概览数据加载失败: ${err.message}`);
@@ -260,6 +263,11 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     loadOverviewStats();
     loadGroupedStats();
   }, [categories.length]);
+
+  // Reload overview when window changes
+  useEffect(() => {
+    loadOverviewStats();
+  }, [overviewWindow]);
 
   // Load grouped stats
   const loadGroupedStats = () => {
@@ -322,6 +330,25 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       loadClassifyRules();
     } catch (e: any) {
       onShowToast(`删除失败: ${e.message}`);
+    }
+  };
+
+  const handleUpdateClassifyRule = async () => {
+    if (!editingClassifyRule) return;
+    try {
+      await updateClassifyRule(editingClassifyRule.id, {
+        keyword: editingClassifyRule.keyword,
+        status_code: editingClassifyRule.status_code,
+        category: editingClassifyRule.category,
+        sub_category: editingClassifyRule.sub_category,
+        recommendation: editingClassifyRule.recommendation,
+        priority: editingClassifyRule.priority,
+      });
+      setEditingClassifyRule(null);
+      onShowToast('分类规则已更新');
+      loadClassifyRules();
+    } catch (e: any) {
+      onShowToast(`更新失败: ${e.message}`);
     }
   };
 
@@ -413,17 +440,36 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Run Realtime Log Analyzer
   const handleAnalyzeCustomLog = async (customJsonStr?: string) => {
-    const textToAnalyze = customJsonStr || testInputJson;
+    const textToAnalyze = (customJsonStr || testInputJson).trim();
     try {
-      const parsedLog = JSON.parse(textToAnalyze) as RawGatewayLog;
+      let content: string;
+      let other = '';
+      let model_name = '';
+      let channel_name = '';
+      let username = '';
+      let group = '';
+
+      if (textToAnalyze.startsWith('{')) {
+        // JSON 模式
+        const parsedLog = JSON.parse(textToAnalyze) as RawGatewayLog;
+        content = parsedLog.content || '';
+        other = parsedLog.other || '';
+        model_name = parsedLog.model_name || '';
+        channel_name = parsedLog.channel_name || '';
+        username = parsedLog.username || '';
+        group = parsedLog.group || '';
+      } else {
+        // 纯文本模式：直接作为 content
+        content = textToAnalyze;
+      }
 
       const result = await classifyLog({
-        content: parsedLog.content || '',
-        other: parsedLog.other || '',
-        model_name: parsedLog.model_name || '未知模型',
-        channel_name: parsedLog.channel_name || '未知渠道',
-        username: parsedLog.username || '匿名用户',
-        group: parsedLog.group || '默认组',
+        content,
+        other,
+        model_name,
+        channel_name,
+        username,
+        group,
       });
 
       setAnalyzedResult({
@@ -515,11 +561,22 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Open conversion form for a sample
   const handleOpenConvertForm = (sample: UnmatchedSample) => {
-    const keywordSlug = (sample.content || '')
-      .replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_')
-      .slice(0, 30);
-    setConvertCode(`ERR_UNMATCHED_${sample.id}_${keywordSlug}`);
-    setConvertName(`未匹配错误 #${sample.id} 自动生成规则`);
+    // 从 content 中提取简短摘要
+    let summary = (sample.content || '')
+      .replace(/^status_code[=:]\s*/, '')        // 去掉开头的 status_code=
+      .replace(/\s*\(request id:.*$/, '')         // 去掉 request id 后缀
+      .replace(/,( request id:.*)?$/, '')         // 去掉逗号后的 request id
+      .trim();
+    // 截断过长摘要
+    if (summary.length > 30) {
+      summary = summary.slice(0, 30) + '...';
+    }
+    // 提取 HTTP 状态码
+    const statusMatch = (sample.content || '').match(/status_code[=:]\s*(\d{3})/);
+    const statusPrefix = statusMatch ? `${statusMatch[1]} ` : '';
+
+    setConvertCode(`ERR_UNMATCHED_${sample.id}`);
+    setConvertName(`${statusPrefix}[未匹配] ${summary || '未知错误'}`);
     setConvertCategory('400 参数格式错误');
     setConvertingSample(sample);
   };
@@ -777,7 +834,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 <div className="flex justify-between items-center text-[12px]">
                   <label className="font-semibold text-[#191c1e] flex items-center gap-1">
                     <span className="material-symbols-outlined text-[16px] text-[#004ac6]">code</span>
-                    网关原始日志 JSON 载荷 (Raw Gateway Log JSON)
+                    网关原始日志 (支持 JSON 或纯文本 content)
                   </label>
                   <button
                     onClick={() => handleAnalyzeCustomLog()}
@@ -820,12 +877,16 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                       </div>
                       <div>
                         <span className="text-[#737686]">匹配模式/关键词：</span>
-                        <span className="font-mono text-[#004ac6] font-bold">{analyzedResult.keywordMatched}</span>
+                        {analyzedResult.keywordMatched ? (
+                          <span className="font-mono text-[#004ac6] font-bold">{analyzedResult.keywordMatched}</span>
+                        ) : (
+                          <span className="text-[#c62828] font-semibold">无匹配</span>
+                        )}
                       </div>
                       <div>
                         <span className="text-[#737686]">受影响模型/渠道：</span>
                         <span className="font-semibold text-[#191c1e]">
-                          {analyzedResult.model} / {analyzedResult.channel}
+                          {analyzedResult.model || '-'} / {analyzedResult.channel || '-'}
                         </span>
                       </div>
                       <div>
@@ -839,6 +900,38 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                     <div className="bg-[#f2f4f6] p-2 rounded text-[11px] leading-[16px] text-[#434655]">
                       💡 <strong>规则推荐：</strong> {analyzedResult.recommendation}
                     </div>
+
+                    {/* 无匹配时：一键添加分类规则 */}
+                    {!analyzedResult.keywordMatched && (
+                      <div className="bg-amber-50 border border-amber-300 p-2.5 rounded">
+                        <p className="text-[11px] text-amber-800 mb-2">未命中任何分类规则，可以抓取 content 中的关键词快速添加：</p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={newClassifyKeyword}
+                            onChange={(e) => setNewClassifyKeyword(e.target.value)}
+                            placeholder="输入匹配关键词..."
+                            className="flex-1 bg-white border border-amber-300 rounded px-2 py-1 text-[11px] outline-none focus:ring-1 focus:ring-amber-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!newClassifyKeyword.trim()) {
+                                onShowToast('请先输入关键词');
+                                return;
+                              }
+                              setShowClassifyPanel(true);
+                              // 滚动到分类规则面板
+                              setTimeout(() => {
+                                document.getElementById('classify-rules-panel')?.scrollIntoView({ behavior: 'smooth' });
+                              }, 100);
+                            }}
+                            className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded transition-colors whitespace-nowrap"
+                          >
+                            + 添加分类规则
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Quick Direct Rule Creation Action */}
                     <div className="pt-2 border-t border-[#e0e3e5] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
@@ -1201,6 +1294,24 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       </div>
 
       {/* Overview Dashboard Cards */}
+      <div className="flex items-center gap-3 mb-3">
+        <span className="text-[11px] font-semibold text-[#737686] whitespace-nowrap">时间范围</span>
+        <div className="flex gap-1">
+          {[1, 6, 12, 24].map(h => (
+            <button
+              key={h}
+              onClick={() => setOverviewWindow(h)}
+              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors ${
+                overviewWindow === h
+                  ? 'bg-[#004ac6] text-white'
+                  : 'bg-[#e0e3e5] text-[#434655] hover:bg-[#c3c6d7]'
+              }`}
+            >
+              {h}h
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 总错误日志 */}
         <div className="bg-white border border-[#c3c6d7] p-5 rounded-xl shadow-2xs">
@@ -1510,7 +1621,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 min={10}
                 value={pollIntervalSeconds}
                 onChange={(e) => {
-                  const val = parseInt(e.target.value) || 60;
+                  const val = parseInt(e.target.value) || 300;
                   setPollIntervalSeconds(val);
                 }}
                 onBlur={() => {
@@ -2592,7 +2703,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       </button>
 
       {showClassifyPanel && (
-        <div className="bg-white border border-[#b4c5ff] rounded-xl shadow-sm p-5 space-y-4">
+        <div id="classify-rules-panel" className="bg-white border border-[#b4c5ff] rounded-xl shadow-sm p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-[15px] font-bold text-[#1c1e2b] flex items-center gap-2">
               <span className="material-symbols-outlined text-[20px] text-[#004ac6]">category</span>
@@ -2606,16 +2717,21 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
             </button>
           </div>
 
-          {/* Add new rule form */}
+          {/* Add / Edit rule form */}
           <div className="bg-[#f8f9fc] border border-[#e0e3e5] rounded-lg p-4 space-y-3">
-            <h4 className="text-[13px] font-bold text-[#004ac6]">添加新分类规则</h4>
+            <h4 className="text-[13px] font-bold text-[#004ac6]">
+              {editingClassifyRule ? '编辑分类规则' : '添加新分类规则'}
+            </h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-[#434655]">关键词 *</label>
                 <input
                   type="text"
-                  value={newClassifyKeyword}
-                  onChange={(e) => setNewClassifyKeyword(e.target.value)}
+                  value={editingClassifyRule ? editingClassifyRule.keyword : newClassifyKeyword}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, keyword: e.target.value })
+                    : setNewClassifyKeyword(e.target.value)
+                  }
                   placeholder="如: model_not_found"
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 />
@@ -2624,16 +2740,22 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 <label className="text-[11px] font-semibold text-[#434655]">状态码 (0=不限)</label>
                 <input
                   type="number"
-                  value={newClassifyStatusCode}
-                  onChange={(e) => setNewClassifyStatusCode(Number(e.target.value))}
+                  value={editingClassifyRule ? editingClassifyRule.status_code : newClassifyStatusCode}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, status_code: Number(e.target.value) })
+                    : setNewClassifyStatusCode(Number(e.target.value))
+                  }
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 />
               </div>
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-[#434655]">主分类</label>
                 <select
-                  value={newClassifyCategory}
-                  onChange={(e) => setNewClassifyCategory(e.target.value)}
+                  value={editingClassifyRule ? editingClassifyRule.category : newClassifyCategory}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, category: e.target.value })
+                    : setNewClassifyCategory(e.target.value)
+                  }
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 >
                   <option value="5xx 服务器错误">5xx 服务器错误</option>
@@ -2649,8 +2771,11 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 <label className="text-[11px] font-semibold text-[#434655]">子分类 *</label>
                 <input
                   type="text"
-                  value={newClassifySubCategory}
-                  onChange={(e) => setNewClassifySubCategory(e.target.value)}
+                  value={editingClassifyRule ? editingClassifyRule.sub_category : newClassifySubCategory}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, sub_category: e.target.value })
+                    : setNewClassifySubCategory(e.target.value)
+                  }
                   placeholder="如: 404 - Model Not Found"
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 />
@@ -2659,8 +2784,11 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 <label className="text-[11px] font-semibold text-[#434655]">建议操作</label>
                 <input
                   type="text"
-                  value={newClassifyRecommendation}
-                  onChange={(e) => setNewClassifyRecommendation(e.target.value)}
+                  value={editingClassifyRule ? editingClassifyRule.recommendation : newClassifyRecommendation}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, recommendation: e.target.value })
+                    : setNewClassifyRecommendation(e.target.value)
+                  }
                   placeholder="如: 检查模型名称或路由配置是否正确"
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 />
@@ -2669,18 +2797,29 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 <label className="text-[11px] font-semibold text-[#434655]">优先级 (越大越优先)</label>
                 <input
                   type="number"
-                  value={newClassifyPriority}
-                  onChange={(e) => setNewClassifyPriority(Number(e.target.value))}
+                  value={editingClassifyRule ? editingClassifyRule.priority : newClassifyPriority}
+                  onChange={(e) => editingClassifyRule
+                    ? setEditingClassifyRule({ ...editingClassifyRule, priority: Number(e.target.value) })
+                    : setNewClassifyPriority(Number(e.target.value))
+                  }
                   className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
                 />
               </div>
             </div>
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {editingClassifyRule && (
+                <button
+                  onClick={() => setEditingClassifyRule(null)}
+                  className="px-4 py-1.5 text-[12px] text-[#737686] hover:text-[#191c1e] font-medium rounded-lg"
+                >
+                  取消
+                </button>
+              )}
               <button
-                onClick={handleAddClassifyRule}
+                onClick={editingClassifyRule ? handleUpdateClassifyRule : handleAddClassifyRule}
                 className="px-4 py-1.5 bg-[#004ac6] text-white text-[12px] font-medium rounded-lg hover:opacity-90"
               >
-                添加规则
+                {editingClassifyRule ? '保存修改' : '添加规则'}
               </button>
             </div>
           </div>
@@ -2712,13 +2851,22 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                       P{rule.priority}
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleDeleteClassifyRule(rule.id)}
-                    className="ml-3 p-1.5 text-[#80848f] hover:text-[#c62828] hover:bg-[#ffe0e0] rounded-lg transition-colors flex-shrink-0"
-                    title="删除"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setEditingClassifyRule(rule)}
+                      className="p-1.5 text-[#80848f] hover:text-[#004ac6] hover:bg-[#d0e1fb] rounded-lg transition-colors flex-shrink-0"
+                      title="编辑"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClassifyRule(rule.id)}
+                      className="p-1.5 text-[#80848f] hover:text-[#c62828] hover:bg-[#ffe0e0] rounded-lg transition-colors flex-shrink-0"
+                      title="删除"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
                 </div>
               ))
             )}

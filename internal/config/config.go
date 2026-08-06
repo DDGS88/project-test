@@ -94,7 +94,7 @@ func Load(path string) (*Config, error) {
 		cfg.Engine.DefaultCooldownSec = 600
 	}
 	if cfg.Engine.ErrorScanPollInterval == 0 {
-		cfg.Engine.ErrorScanPollInterval = 60 * time.Second
+		cfg.Engine.ErrorScanPollInterval = 300 * time.Second
 	}
 	if cfg.Engine.CheckpointFile == "" {
 		cfg.Engine.CheckpointFile = "checkpoint.json"

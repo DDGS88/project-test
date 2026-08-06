@@ -422,8 +422,8 @@ export interface UnmatchedSample {
   cnt: number;
 }
 
-export async function getOverviewStats(): Promise<OverviewStats> {
-  const res = await request<{ data: OverviewStats }>('/error-scan/overview');
+export async function getOverviewStats(windowHours: number = 24): Promise<OverviewStats> {
+  const res = await request<{ data: OverviewStats }>(`/error-scan/overview?window=${windowHours}`);
   return res.data;
 }
 
@@ -548,4 +548,12 @@ export async function createClassifyRule(rule: Omit<ClassifyRule, 'id'>): Promis
 
 export async function deleteClassifyRule(id: number): Promise<void> {
   await request(`/error-scan/classify-rules/${id}`, { method: 'DELETE' });
+}
+
+export async function updateClassifyRule(id: number, rule: Omit<ClassifyRule, 'id' | 'created_at' | 'updated_at'>): Promise<ClassifyRule> {
+  const res = await request<{ data: ClassifyRule }>(`/error-scan/classify-rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(rule),
+  });
+  return res.data;
 }

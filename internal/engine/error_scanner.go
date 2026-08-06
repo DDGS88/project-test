@@ -134,7 +134,7 @@ func (s *ErrorScanner) checkFallbackAlert() {
 		}
 	}
 
-	stats, err := s.logStore.GetOverviewStats(patterns)
+	stats, err := s.logStore.GetOverviewStats(patterns, 1)
 	if err != nil {
 		return
 	}

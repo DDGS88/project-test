@@ -323,7 +323,14 @@ func (h *ErrorScanHandler) GetOverview(c *gin.Context) {
 		}
 	}
 
-	stats, err := h.logStore.GetOverviewStats(patterns)
+	windowHours := 24
+	if wh := c.Query("window"); wh != "" {
+		if v, err := strconv.Atoi(wh); err == nil && v > 0 {
+			windowHours = v
+		}
+	}
+
+	stats, err := h.logStore.GetOverviewStats(patterns, windowHours)
 	if err != nil {
 		h.logger.Error("get overview stats failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -614,4 +621,24 @@ func (h *ErrorScanHandler) DeleteClassifyRule(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}
+
+func (h *ErrorScanHandler) UpdateClassifyRule(c *gin.Context) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var rule store.ErrorClassifyRule
+	if err := c.ShouldBindJSON(&rule); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	rule.Id = id
+	if err := h.classifyStore.Update(&rule); err != nil {
+		h.logger.Error("update classify rule failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": rule})
 }

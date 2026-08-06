@@ -77,6 +77,7 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 		api.POST("/error-scan/classify-log", errorScanHandler.ClassifyLog)
 		api.GET("/error-scan/classify-rules", errorScanHandler.ListClassifyRules)
 		api.POST("/error-scan/classify-rules", errorScanHandler.CreateClassifyRule)
+		api.PUT("/error-scan/classify-rules/:id", errorScanHandler.UpdateClassifyRule)
 		api.DELETE("/error-scan/classify-rules/:id", errorScanHandler.DeleteClassifyRule)
 	}
 }
