@@ -72,6 +72,9 @@ export default function App() {
   // Toast Banner State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Dark mode (global)
+  const [darkMode, setDarkMode] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -110,6 +113,11 @@ export default function App() {
       loadErrorScanRules();
     }
   }, [loadRules, loadErrorScanRules, authenticated]);
+
+  // Sync dark mode to body
+  useEffect(() => {
+    document.body.setAttribute('data-theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   if (!authenticated) {
     return <LoginPage onLogin={handleLogin} />;
@@ -364,7 +372,134 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f7f9fb]">
+    <div className="flex h-screen overflow-hidden bg-[#f7f9fb]" data-theme={darkMode ? 'dark' : 'light'}>
+      <style>{`
+        [data-theme='light'] {
+          --bg-page: #f5f6f8;
+          --bg-card: #ffffff;
+          --bg-card-alt: #f7f9fb;
+          --bg-card-hover: #f2f4f6;
+          --bg-input: #ffffff;
+          --bg-header: #f2f4f6;
+          --bg-tag: #e0e3e5;
+          --bg-badge: #d0e1fb;
+          --bg-success: #e6f4ea;
+          --bg-warning: #fff3e0;
+          --bg-danger: #ffe0e0;
+          --bg-highlight: #f0f0ff;
+          --text-primary: #191c1e;
+          --text-secondary: #434655;
+          --text-muted: #737686;
+          --text-subtle: #80848f;
+          --text-link: #004ac6;
+          --text-success: #006242;
+          --text-warning: #e65100;
+          --text-danger: #c62828;
+          --border-primary: #c3c6d7;
+          --border-secondary: #e0e3e5;
+          --border-accent: #b4c5ff;
+          --accent: #004ac6;
+          --accent-light: #d0e1fb;
+          --scrollbar-thumb: #c3c6d7;
+          --scrollbar-track: transparent;
+        }
+        [data-theme='dark'] {
+          --bg-page: #0f0f1a;
+          --bg-card: #1a1a2e;
+          --bg-card-alt: #1e1e32;
+          --bg-card-hover: #252540;
+          --bg-input: #252540;
+          --bg-header: #1a1a2e;
+          --bg-tag: #2a2a40;
+          --bg-badge: #1a2a4a;
+          --bg-success: #1a3a2a;
+          --bg-warning: #3a2a1a;
+          --bg-danger: #3a1a1a;
+          --bg-highlight: #1a1a3a;
+          --text-primary: #e0e0e0;
+          --text-secondary: #b0b0c0;
+          --text-muted: #8888a0;
+          --text-subtle: #707088;
+          --text-link: #6aadff;
+          --text-success: #4caf50;
+          --text-warning: #ff9800;
+          --text-danger: #ef5350;
+          --border-primary: #2a2a40;
+          --border-secondary: #1e1e32;
+          --border-accent: #2a3a5a;
+          --accent: #5b9bff;
+          --accent-light: #1a2a4a;
+          --scrollbar-thumb: #3a3a50;
+          --scrollbar-track: #1a1a2e;
+        }
+        [data-theme='dark'] .bg-white { background-color: var(--bg-card) !important; }
+        [data-theme='dark'] .bg-\\[\\#f7f9fb\\], [data-theme='dark'] .bg-\\[\\#f8f9fc\\] { background-color: var(--bg-card-alt) !important; }
+        [data-theme='dark'] .bg-\\[\\#f2f4f6\\], [data-theme='dark'] .bg-\\[\\#fafafa\\] { background-color: var(--bg-header) !important; }
+        [data-theme='dark'] .bg-\\[\\#e0e3e5\\] { background-color: var(--bg-tag) !important; }
+        [data-theme='dark'] .bg-\\[\\#d0e1fb\\] { background-color: var(--bg-badge) !important; }
+        [data-theme='dark'] .bg-\\[\\#f0f0ff\\],[data-theme='dark'] .bg-\\[\\#eeefff\\],[data-theme='dark'] .bg-\\[\\#f4f7ff\\] { background-color: var(--bg-highlight) !important; }
+        [data-theme='dark'] .text-\\[\\#191c1e\\],[data-theme='dark'] .text-\\[\\#1c1e2b\\] { color: var(--text-primary) !important; }
+        [data-theme='dark'] .text-\\[\\#434655\\] { color: var(--text-secondary) !important; }
+        [data-theme='dark'] .text-\\[\\#737686\\],[data-theme='dark'] .text-\\[\\#80848f\\] { color: var(--text-muted) !important; }
+        [data-theme='dark'] .text-\\[\\#004ac6\\] { color: var(--text-link) !important; }
+        [data-theme='dark'] .text-\\[\\#006242\\],[data-theme='dark'] .text-emerald-600,[data-theme='dark'] .text-emerald-700 { color: var(--text-success) !important; }
+        [data-theme='dark'] .text-\\[\\#e65100\\],[data-theme='dark'] .text-amber-600,[data-theme='dark'] .text-amber-700,[data-theme='dark'] .text-amber-800 { color: var(--text-warning) !important; }
+        [data-theme='dark'] .text-\\[\\#c62828\\] { color: var(--text-danger) !important; }
+        [data-theme='dark'] .border-\\[\\#c3c6d7\\] { border-color: var(--border-primary) !important; }
+        [data-theme='dark'] .border-\\[\\#e0e3e5\\] { border-color: var(--border-secondary) !important; }
+        [data-theme='dark'] .border-\\[\\#b4c5ff\\] { border-color: var(--border-accent) !important; }
+        [data-theme='dark'] .bg-\\[\\#004ac6\\] { background-color: var(--accent) !important; }
+        [data-theme='dark'] .from-\\[\\#f7f9fc\\] { --tw-gradient-from: var(--bg-card-alt); }
+        [data-theme='dark'] .bg-\\[\\#1e1e1e\\] { background-color: #0d0d1a !important; }
+        [data-theme='dark'] .text-\\[\\#d4d4d4\\] { color: #c0c0d0 !important; }
+        [data-theme='dark'] .bg-gradient-to-r { background-image: none !important; }
+        [data-theme='dark'] .shadow-2xs { box-shadow: 0 1px 2px rgba(0,0,0,0.3) !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#f7f9fb\\]:hover { background-color: var(--bg-card-hover) !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#f2f4f6\\]:hover { background-color: var(--bg-card-hover) !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#e0e3e5\\]:hover { background-color: #3a3a50 !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#e6e6ff\\]:hover,[data-theme='dark'] .hover\\:bg-\\[\\#eeefff\\]:hover { background-color: var(--bg-highlight) !important; }
+        [data-theme='dark'] .hover\\:bg-amber-50:hover { background-color: var(--bg-warning) !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#d0e1fb\\]:hover { background-color: var(--bg-badge) !important; }
+        [data-theme='dark'] .hover\\:bg-\\[\\#ffe0e0\\]:hover { background-color: var(--bg-danger) !important; }
+        [data-theme='dark'] .hover\\:text-\\[\\#191c1e\\]:hover { color: var(--text-primary) !important; }
+        [data-theme='dark'] .hover\\:text-\\[\\#1c1e2b\\]:hover,[data-theme='dark'] .hover\\:text-\\[\\#004ac6\\]:hover { color: var(--text-link) !important; }
+        [data-theme='dark'] .hover\\:text-\\[\\#c62828\\]:hover { color: var(--text-danger) !important; }
+        [data-theme='dark'] .hover\\:border-\\[\\#b4c5ff\\]:hover { border-color: var(--border-accent) !important; }
+        [data-theme='dark'] .divide-\\[\\#e0e3e5\\] > * + * { border-color: var(--border-secondary) !important; }
+        [data-theme='dark'] ::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb); }
+        [data-theme='dark'] ::-webkit-scrollbar-track { background-color: var(--scrollbar-track); }
+        [data-theme='dark'] body { background-color: var(--bg-page); }
+        [data-theme='dark'] .bg-amber-500 { background-color: #d97706 !important; }
+        [data-theme='dark'] .bg-amber-500:hover { background-color: #b45309 !important; }
+        [data-theme='dark'] .border-amber-300 { border-color: #5a4a20 !important; }
+        [data-theme='dark'] .bg-\\[\\#e6f4ea\\] { background-color: var(--bg-success) !important; }
+        [data-theme='dark'] .bg-\\[\\#fff3e0\\],[data-theme='dark'] .bg-amber-50 { background-color: var(--bg-warning) !important; }
+        [data-theme='dark'] .bg-\\[\\#ffe0e0\\] { background-color: var(--bg-danger) !important; }
+        [data-theme='dark'] .text-\\[\\#003ea8\\] { color: var(--text-link) !important; }
+        [data-theme='dark'] .bg-\\[\\#eceef0\\] { background-color: #2a2a40 !important; }
+        [data-theme='dark'] .bg-\\[\\#e6e8ea\\] { background-color: #2a2a40 !important; }
+        [data-theme='dark'] select {
+          color: var(--text-primary) !important;
+          background-color: var(--bg-card) !important;
+          border-color: var(--border-primary) !important;
+        }
+        [data-theme='dark'] select option {
+          background-color: var(--bg-card) !important;
+          color: var(--text-primary) !important;
+        }
+        [data-theme='dark'] input:not([type="button"]):not([type="submit"]),
+        [data-theme='dark'] textarea {
+          color: var(--text-primary) !important;
+          background-color: var(--bg-input) !important;
+          border-color: var(--border-primary) !important;
+        }
+        [data-theme='dark'] input::placeholder,
+        [data-theme='dark'] textarea::placeholder {
+          color: var(--text-muted) !important;
+        }
+        body { background-color: var(--bg-page); transition: background-color 0.3s, color 0.3s; }
+        * { transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+      `}</style>
       {toastMessage && (
         <div className="fixed top-4 right-4 z-50 bg-[#191c1e] text-white px-4 py-2.5 rounded-xl shadow-2xl text-[13px] font-semibold flex items-center gap-2 border border-[#737686] animate-scale-in">
           <span className="material-symbols-outlined text-[18px] text-[#bdffdb]">
@@ -401,6 +536,8 @@ export default function App() {
             setIsCreateModalOpen(true);
           }}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
         />
 
         <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth">

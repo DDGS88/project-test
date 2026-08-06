@@ -8,6 +8,8 @@ interface TopHeaderProps {
   setSearchQuery: (query: string) => void;
   onCreateRule: () => void;
   onToggleMobileSidebar: () => void;
+  darkMode: boolean;
+  setDarkMode: (v: boolean) => void;
 }
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -17,6 +19,8 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   setSearchQuery,
   onCreateRule,
   onToggleMobileSidebar,
+  darkMode,
+  setDarkMode,
 }) => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
@@ -125,6 +129,15 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   >
                     <span className="material-symbols-outlined text-[16px]">settings</span>
                     网关全局设置
+                  </button>
+                  <button
+                    onClick={() => { setDarkMode(!darkMode); setShowUserDropdown(false); }}
+                    className="w-full text-left px-3 py-2 text-[13px] text-[#434655] hover:bg-[#f2f4f6] rounded-lg flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">
+                      {darkMode ? 'light_mode' : 'dark_mode'}
+                    </span>
+                    {darkMode ? '切换浅色模式' : '切换暗黑模式'}
                   </button>
                   <button
                     onClick={() => setShowUserDropdown(false)}
