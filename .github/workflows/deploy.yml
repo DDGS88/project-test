@@ -42,6 +42,7 @@ jobs:
       - name: Save image as tar
         run: |
           docker save -o tt-inspector.tar tt-inspector:${{ steps.env.outputs.TAG }}
+          sudo chmod 644 tt-inspector.tar
 
       # ── 部署到开发服务器（develop 分支） ──
 
