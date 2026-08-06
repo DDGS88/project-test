@@ -467,6 +467,32 @@ func (h *ErrorScanHandler) GetGroupedStats(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": results})
 }
 
+func (h *ErrorScanHandler) GetGroupedSamples(c *gin.Context) {
+	dimension := c.DefaultQuery("dimension", "channel")
+	rawKey := c.Query("raw_key")
+	if rawKey == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "raw_key is required"})
+		return
+	}
+	windowHours := 1
+	if wh := c.Query("window"); wh != "" {
+		if v, err := strconv.Atoi(wh); err == nil && v > 0 {
+			windowHours = v
+		}
+	}
+
+	samples, err := h.logStore.GetGroupedErrorSamples(dimension, rawKey, windowHours, 50)
+	if err != nil {
+		h.logger.Error("get grouped samples failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if samples == nil {
+		samples = []store.GroupedErrorDetail{}
+	}
+	c.JSON(http.StatusOK, gin.H{"data": samples})
+}
+
 // ClassifyLog 根据分类规则匹配一条错误日志
 func (h *ErrorScanHandler) ClassifyLog(c *gin.Context) {
 	var body struct {

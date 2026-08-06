@@ -73,6 +73,7 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 		api.GET("/error-scan/fallback-config", errorScanHandler.GetFallbackConfig)
 		api.POST("/error-scan/fallback-config", errorScanHandler.SetFallbackConfig)
 		api.GET("/error-scan/grouped-stats", errorScanHandler.GetGroupedStats)
+		api.GET("/error-scan/grouped-samples", errorScanHandler.GetGroupedSamples)
 		api.POST("/error-scan/classify-log", errorScanHandler.ClassifyLog)
 		api.GET("/error-scan/classify-rules", errorScanHandler.ListClassifyRules)
 		api.POST("/error-scan/classify-rules", errorScanHandler.CreateClassifyRule)

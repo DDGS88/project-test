@@ -186,6 +186,7 @@ func (s *LogStore) CountErrorLogsGrouped(startTime, endTime int64, patternKeywor
 type GroupedStatItem struct {
 	GroupValue string `json:"group_value"`
 	Count      int64  `json:"count"`
+	RawKey     string `json:"raw_key"`  // 原始分组键（渠道为 channel_id，用于二次查询）
 	Keywords   string `json:"keywords"` // 该分组下的关键词摘要（仅按关键词时有值）
 }
 
@@ -205,7 +206,7 @@ func (s *LogStore) GetGroupedErrorStats(dimension string, windowHours int) ([]Gr
 	}
 
 	query := s.db.Model(&model.Log{}).
-		Select(fmt.Sprintf("%s AS group_value, COUNT(*) AS count", col)).
+		Select(fmt.Sprintf("%s AS group_value, %s AS raw_key, COUNT(*) AS count", col, col)).
 		Where("type = ?", 5).
 		Where("created_at >= ?", windowStart)
 
@@ -236,6 +237,52 @@ func (s *LogStore) GetGroupedErrorByKeyword(windowHours int) ([]GroupedStatItem,
 		Group("LEFT(content, 60)").
 		Order("count DESC").
 		Limit(50).
+		Scan(&results).Error
+	return results, err
+}
+
+// GroupedErrorDetail 分组错误明细（单条日志）
+type GroupedErrorDetail struct {
+	Id          int64  `json:"id"`
+	Content     string `json:"content"`
+	Other       string `json:"other"`
+	ModelName   string `json:"model_name"`
+	ChannelName string `json:"channel_name"`
+	ChannelId   int    `json:"channel_id"`
+	Username    string `json:"username"`
+	GroupName   string `json:"group_name"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+// GetGroupedErrorSamples 按维度获取分组下的错误日志明细
+func (s *LogStore) GetGroupedErrorSamples(dimension, rawKey string, windowHours, limit int) ([]GroupedErrorDetail, error) {
+	windowStart := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
+
+	colMap := map[string]string{
+		"channel": "channel_id",
+		"model":   "model_name",
+		"user":    "username",
+		"keyword": "content",
+	}
+	col, ok := colMap[dimension]
+	if !ok {
+		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
+	}
+
+	query := s.db.Model(&model.Log{}).
+		Select("id, LEFT(content, 200) AS content, other, model_name, channel_name, channel_id, username, `group` AS group_name, created_at").
+		Where("type = ?", 5).
+		Where("created_at >= ?", windowStart)
+
+	if dimension == "keyword" {
+		query = query.Where("content LIKE ?", "%"+rawKey+"%")
+	} else {
+		query = query.Where(col+" = ?", rawKey)
+	}
+
+	var results []GroupedErrorDetail
+	err := query.Order("created_at DESC").
+		Limit(limit).
 		Scan(&results).Error
 	return results, err
 }

@@ -17,6 +17,7 @@ import {
   getFallbackConfig,
   setFallbackConfig,
   getGroupedStats,
+  getGroupedSamples,
   classifyLog,
   listClassifyRules,
   createClassifyRule,
@@ -27,6 +28,7 @@ import type {
   OverviewStats,
   UnmatchedSample,
   GroupedStatItem,
+  GroupedErrorDetail,
   ClassifyResult,
   ClassifyRule,
 } from '../api/rules';
@@ -193,6 +195,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [groupDimension, setGroupDimension] = useState('channel');
   const [groupWindow, setGroupWindow] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [groupDetails, setGroupDetails] = useState<Record<string, GroupedErrorDetail[]>>({});
+  const [groupDetailsLoading, setGroupDetailsLoading] = useState<Set<string>>(new Set());
+  const [detailModalItem, setDetailModalItem] = useState<GroupedErrorDetail | null>(null);
 
   // Exclude edit state
   const [editingExcludes, setEditingExcludes] = useState<ErrorScanCategory | null>(null);
@@ -265,6 +270,8 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   useEffect(() => {
     loadGroupedStats();
+    setExpandedGroups(new Set());
+    setGroupDetails({});
   }, [groupDimension, groupWindow]);
 
   // Load fallback config on mount
@@ -1313,13 +1320,28 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
               return (
                 <div key={item.group_value} className="hover:bg-[#f7f9fb] transition-colors">
                   <button
-                    onClick={() => {
-                      setExpandedGroups(prev => {
-                        const next = new Set(prev);
-                        if (isExpanded) next.delete(item.group_value);
-                        else next.add(item.group_value);
-                        return next;
-                      });
+                    onClick={async () => {
+                      const wasExpanded = expandedGroups.has(item.group_value);
+                      const next = new Set(expandedGroups);
+                      if (wasExpanded) {
+                        next.delete(item.group_value);
+                      } else {
+                        next.add(item.group_value);
+                        // 懒加载明细
+                        if (!groupDetails[item.group_value] && !groupDetailsLoading.has(item.group_value)) {
+                          setGroupDetailsLoading(prev => new Set(prev).add(item.group_value));
+                          try {
+                            const samples = await getGroupedSamples(groupDimension, item.raw_key || item.group_value, groupWindow);
+                            setGroupDetails(prev => ({ ...prev, [item.group_value]: samples }));
+                          } catch { /* ignore */ }
+                          setGroupDetailsLoading(prev => {
+                            const s = new Set(prev);
+                            s.delete(item.group_value);
+                            return s;
+                          });
+                        }
+                      }
+                      setExpandedGroups(next);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[#f2f4f6] transition-colors"
                   >
@@ -1337,13 +1359,49 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                     </div>
                   </button>
                   {isExpanded && (
-                    <div className="px-10 pb-3 text-[12px] text-[#737686] space-y-1">
-                      <p>
+                    <div className="px-10 pb-3">
+                      <p className="text-[12px] text-[#737686] mb-2">
                         {groupDimension === 'keyword'
                           ? `关键词: ${item.group_value}`
                           : `${groupDimension === 'channel' ? '渠道' : groupDimension === 'model' ? '模型' : '用户'}: ${item.group_value}`}
+                        <span className="ml-2">错误次数: <span className="font-bold text-[#191c1e]">{item.count}</span></span>
                       </p>
-                      <p>错误次数: <span className="font-bold text-[#191c1e]">{item.count}</span></p>
+                      {/* 错误明细列表 */}
+                      {groupDetailsLoading.has(item.group_value) ? (
+                        <div className="py-4 text-center text-[12px] text-[#737686]">加载中...</div>
+                      ) : groupDetails[item.group_value]?.length ? (
+                        <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                          {groupDetails[item.group_value]!.map((detail, idx) => (
+                            <div
+                              key={detail.id}
+                              className="flex items-center gap-2 px-2 py-1.5 bg-[#f7f9fb] rounded border border-[#e0e3e5] hover:border-[#004ac6] transition-colors cursor-pointer group"
+                              onClick={() => setDetailModalItem(detail)}
+                            >
+                              <span className="text-[11px] font-mono text-[#737686] min-w-[40px]">#{idx + 1}</span>
+                              <span className="flex-1 text-[12px] text-[#191c1e] truncate" title={detail.content}>
+                                {detail.content.length > 60 ? detail.content.slice(0, 60) + '...' : detail.content}
+                              </span>
+                              <span className="text-[11px] text-[#737686] whitespace-nowrap">
+                                {detail.model_name || '-'}
+                              </span>
+                              <span className="text-[11px] text-[#737686] whitespace-nowrap">
+                                {detail.channel_name || (detail.channel_id ? `渠道#${detail.channel_id}` : '-')}
+                              </span>
+                              <span className="text-[11px] text-[#737686] font-mono whitespace-nowrap">
+                                {new Date(detail.created_at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                              <span className="material-symbols-outlined text-[14px] text-[#004ac6] opacity-0 group-hover:opacity-100 transition-opacity">
+                                open_in_new
+                              </span>
+                            </div>
+                          ))}
+                          {groupDetails[item.group_value]!.length >= 50 && (
+                            <p className="text-[11px] text-[#737686] text-center pt-1">仅显示最近 50 条</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="py-2 text-[12px] text-[#737686]">暂无明细数据</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2664,6 +2722,72 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+      
+      {/* 错误详情弹窗 */}
+      {detailModalItem && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/40" onClick={() => setDetailModalItem(null)}>
+          <div className="bg-white rounded-xl shadow-2xl border border-[#c3c6d7] w-full max-w-2xl mx-4 max-h-[75vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-[#e0e3e5] bg-[#f2f4f6]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-[#c62828]">error</span>
+                <span className="text-[14px] font-semibold text-[#191c1e]">错误详情</span>
+              </div>
+              <button
+                onClick={() => setDetailModalItem(null)}
+                className="p-1.5 text-[#737686] hover:text-[#191c1e] hover:bg-[#e0e3e5] rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-3">
+              <div>
+                <label className="text-[11px] font-semibold text-[#737686] uppercase tracking-wide">错误内容</label>
+                <div className="mt-1 p-3 bg-[#f7f9fb] border border-[#e0e3e5] rounded-lg text-[13px] text-[#191c1e] break-all font-mono leading-relaxed">
+                  {detailModalItem.content}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">模型</label>
+                  <div className="mt-0.5 text-[13px] text-[#191c1e]">{detailModalItem.model_name || '-'}</div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">渠道</label>
+                  <div className="mt-0.5 text-[13px] text-[#191c1e]">
+                    {detailModalItem.channel_name || (detailModalItem.channel_id ? `渠道#${detailModalItem.channel_id}` : '-')}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">用户</label>
+                  <div className="mt-0.5 text-[13px] text-[#191c1e]">{detailModalItem.username || '-'}</div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">用户组</label>
+                  <div className="mt-0.5 text-[13px] text-[#191c1e]">{detailModalItem.group_name || '-'}</div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">时间</label>
+                  <div className="mt-0.5 text-[13px] text-[#191c1e] font-mono">
+                    {new Date(detailModalItem.created_at * 1000).toLocaleString('zh-CN')}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686]">日志 ID</label>
+                  <div className="mt-0.5 text-[13px] text-[#737686] font-mono">#{detailModalItem.id}</div>
+                </div>
+              </div>
+              {detailModalItem.other && (
+                <div>
+                  <label className="text-[11px] font-semibold text-[#737686] uppercase tracking-wide">附加信息 (Other)</label>
+                  <div className="mt-1 p-3 bg-[#f7f9fb] border border-[#e0e3e5] rounded-lg text-[12px] text-[#434655] break-all font-mono max-h-[150px] overflow-y-auto">
+                    {detailModalItem.other}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

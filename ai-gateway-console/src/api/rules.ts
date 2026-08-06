@@ -463,11 +463,31 @@ export async function setFallbackConfig(enabled: boolean, webhook: string): Prom
 export interface GroupedStatItem {
   group_value: string;
   count: number;
+  raw_key: string;
 }
 
 export async function getGroupedStats(dimension: string, windowHours: number): Promise<GroupedStatItem[]> {
   const res = await request<{ data: GroupedStatItem[] }>(
     `/error-scan/grouped-stats?dimension=${dimension}&window=${windowHours}`
+  );
+  return res.data || [];
+}
+
+export interface GroupedErrorDetail {
+  id: number;
+  content: string;
+  other: string;
+  model_name: string;
+  channel_name: string;
+  channel_id: number;
+  username: string;
+  group_name: string;
+  created_at: number;
+}
+
+export async function getGroupedSamples(dimension: string, rawKey: string, windowHours: number): Promise<GroupedErrorDetail[]> {
+  const res = await request<{ data: GroupedErrorDetail[] }>(
+    `/error-scan/grouped-samples?dimension=${dimension}&raw_key=${encodeURIComponent(rawKey)}&window=${windowHours}`
   );
   return res.data || [];
 }
