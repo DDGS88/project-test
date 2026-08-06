@@ -190,9 +190,12 @@ type GroupedStatItem struct {
 }
 
 // GetGroupedErrorStats 按维度分组统计 type=5 错误日志，支持时间窗口
+// 渠道维度返回 channel_id（调用方需自行通过 channels 表映射名称）
 func (s *LogStore) GetGroupedErrorStats(dimension string, windowHours int) ([]GroupedStatItem, error) {
+	windowStart := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
+
 	colMap := map[string]string{
-		"channel": "channel_name",
+		"channel": "channel_id",
 		"model":   "model_name",
 		"user":    "username",
 	}
@@ -201,15 +204,19 @@ func (s *LogStore) GetGroupedErrorStats(dimension string, windowHours int) ([]Gr
 		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
 	}
 
-	windowStart := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
-
-	var results []GroupedStatItem
-	err := s.db.Model(&model.Log{}).
+	query := s.db.Model(&model.Log{}).
 		Select(fmt.Sprintf("%s AS group_value, COUNT(*) AS count", col)).
 		Where("type = ?", 5).
-		Where("created_at >= ?", windowStart).
-		Where(col + " != ''").
-		Group(col).
+		Where("created_at >= ?", windowStart)
+
+	if dimension == "channel" {
+		query = query.Where("channel_id != 0")
+	} else {
+		query = query.Where(col + " != ''")
+	}
+
+	var results []GroupedStatItem
+	err := query.Group(col).
 		Order("count DESC").
 		Limit(50).
 		Scan(&results).Error
@@ -266,13 +273,15 @@ type OverviewStats struct {
 	ActiveRules     int64   `json:"active_rules"`
 }
 
-// GetOverviewStats 获取错误日志概览统计
+// GetOverviewStats 获取最近 24 小时错误日志概览统计
 func (s *LogStore) GetOverviewStats(rulePatterns []string) (*OverviewStats, error) {
 	stats := &OverviewStats{}
+	since := time.Now().Add(-24 * time.Hour).Unix()
 
 	// 总 type=5 错误数
 	if err := s.db.Model(&model.Log{}).
 		Where("type = ?", 5).
+		Where("created_at >= ?", since).
 		Count(&stats.TotalErrors).Error; err != nil {
 		return nil, err
 	}
@@ -286,6 +295,7 @@ func (s *LogStore) GetOverviewStats(rulePatterns []string) (*OverviewStats, erro
 		var cnt int64
 		if err := s.db.Model(&model.Log{}).
 			Where("type = ?", 5).
+			Where("created_at >= ?", since).
 			Where("content "+s.regexOp+" ?", pattern).
 			Count(&cnt).Error; err != nil {
 			return nil, err
@@ -312,13 +322,15 @@ type ErrorSampleWithId struct {
 	Cnt         int64  `json:"cnt"`
 }
 
-// GetUnmatchedErrorSamples 获取未匹配规则的错误样本
+// GetUnmatchedErrorSamples 获取最近 24 小时未匹配规则的错误样本
 func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int) ([]ErrorSampleWithId, error) {
 	var results []ErrorSampleWithId
+	since := time.Now().Add(-24 * time.Hour).Unix()
 
 	query := s.db.Model(&model.Log{}).
 		Select("MIN(id) AS id, LEFT(content, 120) AS content, other, model_name, channel_name, username, COUNT(*) AS cnt").
 		Where("type = ?", 5).
+		Where("created_at >= ?", since).
 		Where("content != ''")
 
 	// 排除已匹配的 pattern（逐个 NOT REGEXP）

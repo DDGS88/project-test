@@ -103,3 +103,16 @@ func (s *ChannelStore) ListModelsByChannel(channelId int64) ([]string, error) {
 		Pluck("model", &models).Error
 	return models, err
 }
+
+// GetChannelNameMap 获取所有渠道 id → name 的映射
+func (s *ChannelStore) GetChannelNameMap() (map[int64]string, error) {
+	var channels []model.Channel
+	if err := s.db.Select("id, name").Find(&channels).Error; err != nil {
+		return nil, err
+	}
+	m := make(map[int64]string, len(channels))
+	for _, ch := range channels {
+		m[ch.Id] = ch.Name
+	}
+	return m, nil
+}

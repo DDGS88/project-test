@@ -20,6 +20,7 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 		store:         errorScanStore,
 		logStore:      logStore,
 		classifyStore: classifyStore,
+		channelStore:  channelStore,
 		scanner:       errorScanner,
 		logger:        logger,
 	}

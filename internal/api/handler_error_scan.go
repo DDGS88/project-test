@@ -17,6 +17,7 @@ type ErrorScanHandler struct {
 	store         *store.ErrorScanStore
 	logStore      *store.LogStore
 	classifyStore *store.ErrorClassifyStore
+	channelStore  *store.ChannelStore
 	scanner       *engine.ErrorScanner
 	logger        *zap.Logger
 }
@@ -441,6 +442,25 @@ func (h *ErrorScanHandler) GetGroupedStats(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// 渠道维度：将 channel_id 映射为渠道名称
+	if dimension == "channel" && h.channelStore != nil {
+		nameMap, mapErr := h.channelStore.GetChannelNameMap()
+		if mapErr != nil {
+			h.logger.Warn("get channel name map failed", zap.Error(mapErr))
+		} else {
+			for i := range results {
+				if id, parseErr := strconv.ParseInt(results[i].GroupValue, 10, 64); parseErr == nil {
+					if name, ok := nameMap[id]; ok && name != "" {
+						results[i].GroupValue = name
+					} else {
+						results[i].GroupValue = "渠道#" + results[i].GroupValue
+					}
+				}
+			}
+		}
+	}
+
 	if results == nil {
 		results = []store.GroupedStatItem{}
 	}
