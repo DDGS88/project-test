@@ -68,11 +68,31 @@ jobs:
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
+            mkdir -p /opt/tt-inspector/data
+            cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
+            services:
+              tt-inspector:
+                image: ${IMAGE}:${TAG}
+                container_name: tt-inspector
+                restart: unless-stopped
+                ports:
+                  - "9200:9200"
+                environment:
+                  TZ: Asia/Shanghai
+                volumes:
+                  - ./data:/app/data
+                networks:
+                  - tt-network
+
+            networks:
+              tt-network:
+                driver: bridge
+            COMPOSE_EOF
             cd /opt/tt-inspector
-            echo "TAG=${{ steps.env.outputs.TAG }}" > .env.tag
-            echo "IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> .env.tag
-            docker compose -f docker-compose.deploy.yaml pull
-            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
+              docker compose -f docker-compose.deploy.yaml pull
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
+              docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
 
       # ── 部署到生产服务器（main 分支） ──
       - name: Deploy to Prod server
@@ -84,8 +104,28 @@ jobs:
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
+            mkdir -p /opt/tt-inspector/data
+            cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
+            services:
+              tt-inspector:
+                image: ${IMAGE}:${TAG}
+                container_name: tt-inspector
+                restart: unless-stopped
+                ports:
+                  - "9200:9200"
+                environment:
+                  TZ: Asia/Shanghai
+                volumes:
+                  - ./data:/app/data
+                networks:
+                  - tt-network
+
+            networks:
+              tt-network:
+                driver: bridge
+            COMPOSE_EOF
             cd /opt/tt-inspector
-            echo "TAG=${{ steps.env.outputs.TAG }}" > .env.tag
-            echo "IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> .env.tag
-            docker compose -f docker-compose.deploy.yaml pull
-            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
+              docker compose -f docker-compose.deploy.yaml pull
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }} TAG=${{ steps.env.outputs.TAG }} \
+              docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
