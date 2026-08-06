@@ -269,8 +269,10 @@ func (s *LogStore) GetGroupedErrorSamples(dimension, rawKey string, windowHours,
 		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
 	}
 
+	qo, qc := s.quoteGroup()
+
 	query := s.db.Model(&model.Log{}).
-		Select("id, LEFT(content, 200) AS content, other, model_name, channel_name, channel_id, username, `group` AS group_name, created_at").
+		Select(fmt.Sprintf("id, LEFT(content, 200) AS content, other, model_name, channel_name, channel_id, username, %s AS group_name, created_at", qo+"group"+qc)).
 		Where("type = ?", 5).
 		Where("created_at >= ?", windowStart)
 
@@ -287,6 +289,14 @@ func (s *LogStore) GetGroupedErrorSamples(dimension, rawKey string, windowHours,
 	return results, err
 }
 
+// quoteGroup 返回 group 列名的引号字符（open, close），兼容 MySQL/PG
+func (s *LogStore) quoteGroup() (string, string) {
+	if s.regexOp == "~*" {
+		return "\"", "\""
+	}
+	return "`", "`"
+}
+
 // ErrorSample 错误类型样本
 type ErrorSample struct {
 	Content     string `json:"content"`
@@ -299,12 +309,13 @@ type ErrorSample struct {
 
 // GetRecentErrorSamples 获取最近 type=5 错误日志的不同类型样本（按 content 前 120 字符分组去重）
 func (s *LogStore) GetRecentErrorSamples(limit int) ([]ErrorSample, error) {
+	qo, qc := s.quoteGroup()
 	var results []ErrorSample
 	err := s.db.Model(&model.Log{}).
-		Select("LEFT(content, 120) AS content, other, model_name, channel_name, `group` AS group_name, COUNT(*) AS cnt").
+		Select(fmt.Sprintf("LEFT(content, 120) AS content, other, model_name, channel_name, %s AS group_name, COUNT(*) AS cnt", qo+"group"+qc)).
 		Where("type = ?", 5).
 		Where("content != ''").
-		Group("LEFT(content, 120), other, model_name, channel_name, `group`").
+		Group(fmt.Sprintf("LEFT(content, 120), other, model_name, channel_name, %s", qo+"group"+qc)).
 		Order("MAX(created_at) DESC").
 		Limit(limit).
 		Scan(&results).Error
