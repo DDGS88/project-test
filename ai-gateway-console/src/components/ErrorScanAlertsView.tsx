@@ -177,6 +177,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'alerting' | 'suppressed' | 'disabled'>('all');
   const [userFilter, setUserFilter] = useState<string>('all');
   const [channelFilter, setChannelFilter] = useState<string>('all');
+
+  // Tab navigation
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'classify' | 'alert'>('dashboard');
   const [modelFilter, setModelFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isScanning, setIsScanning] = useState<boolean>(false);
@@ -231,7 +234,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Classify rules management state
   const [classifyRules, setClassifyRules] = useState<ClassifyRule[]>([]);
-  const [showClassifyPanel, setShowClassifyPanel] = useState(false);
   const [newClassifyKeyword, setNewClassifyKeyword] = useState('');
   const [newClassifyStatusCode, setNewClassifyStatusCode] = useState(0);
   const [newClassifyCategory, setNewClassifyCategory] = useState('5xx 服务器错误');
@@ -296,6 +298,13 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const loadClassifyRules = () => {
     listClassifyRules().then(setClassifyRules).catch(() => {});
   };
+
+  // Auto-load classify rules when tab becomes active
+  useEffect(() => {
+    if (activeTab === 'classify') {
+      loadClassifyRules();
+    }
+  }, [activeTab]);
 
   const handleAddClassifyRule = async () => {
     if (!newClassifyKeyword || !newClassifySubCategory) {
@@ -783,6 +792,31 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         深度解析 <code className="bg-[#e0e3e5] px-1 py-0.5 rounded text-[#191c1e] font-mono text-[11px]">content</code> 与 <code className="bg-[#e0e3e5] px-1 py-0.5 rounded text-[#191c1e] font-mono text-[11px]">other</code> 扩展字段，将 400/500 错误精准下钻细化为工具上下文不配对、文本块为空、模型容量超载等精细类别。
       </p>
 
+      {/* Tab Navigation */}
+      <div className="flex border-b border-[#c3c6d7] -mb-1">
+        {[
+          { key: 'dashboard' as const, label: '错误日志看板', icon: 'monitoring' },
+          { key: 'classify' as const, label: '分类规则管理', icon: 'category' },
+          { key: 'alert' as const, label: '飞书告警配置 & 全局策略', icon: 'notifications_active' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors -mb-[1px] ${
+              activeTab === tab.key
+                ? 'border-[#004ac6] text-[#004ac6] bg-[#f0f0ff]'
+                : 'border-transparent text-[#737686] hover:text-[#191c1e] hover:bg-[#f7f9fb]'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Tab: 错误日志看板 ─── */}
+      {activeTab === 'dashboard' && (<>
+      
       {/* Interactive JSON Log Classifier Inspector Section */}
       <div className="bg-gradient-to-r from-[#f7f9fc] via-white to-[#eeefff] border border-[#b4c5ff] rounded-xl p-5 shadow-2xs space-y-4">
         <div className="flex items-center justify-between">
@@ -919,11 +953,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                                 onShowToast('请先输入关键词');
                                 return;
                               }
-                              setShowClassifyPanel(true);
-                              // 滚动到分类规则面板
-                              setTimeout(() => {
-                                document.getElementById('classify-rules-panel')?.scrollIntoView({ behavior: 'smooth' });
-                              }, 100);
+                              setActiveTab('classify');
                             }}
                             className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold rounded transition-colors whitespace-nowrap"
                           >
@@ -960,6 +990,10 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
           </div>
         )}
       </div>
+
+      </>)}
+      {/* ─── Tab: 飞书告警配置 & 全局策略 ─── */}
+      {activeTab === 'alert' && (<>
 
       {/* Global Configuration Bar: Scan & Alert Granularity Settings + Feishu Webhook */}
       <div className="bg-white border border-[#c3c6d7] rounded-xl p-5 shadow-2xs space-y-5">
@@ -1206,6 +1240,10 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
           </div>
         </div>
       </div>
+
+      </>)}
+      {/* ─── Tab: 错误日志看板 (continued) ─── */}
+      {activeTab === 'dashboard' && (<>
 
       {/* Summary Metrics Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1937,6 +1975,15 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
           </table>
         </div>
       </div>
+
+      </>)}
+      {/* ─── Tab: 飞书告警配置 & 全局策略 ─── */}
+      {activeTab === 'alert' && (<> </>)}
+      
+      {/* ─── Tab: 分类规则管理 ─── */}
+      {activeTab === 'classify' && (<> </>)}
+      
+      {/* ─── Modals (shared across all tabs) ─── */}
 
       {/* Detail Inspect Modal Drawer */}
       {inspectingCategory && (
@@ -2687,192 +2734,175 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         </div>
       )}
 
-      {/* Classify Rules Management Panel */}
-      <button
-        onClick={() => {
-          setShowClassifyPanel(!showClassifyPanel);
-          if (!showClassifyPanel) loadClassifyRules();
-        }}
-        className="flex items-center gap-2 px-4 py-2 bg-[#f0f0ff] border border-[#b4c5ff] text-[#004ac6] text-[13px] font-medium rounded-lg hover:bg-[#e6e6ff] transition-colors"
-      >
-        <span className="material-symbols-outlined text-[18px]">category</span>
-        {showClassifyPanel ? '收起分类规则' : '管理分类规则'}
-        <span className="text-[10px] px-1.5 py-0.5 bg-[#004ac6] text-white rounded-full">
-          {classifyRules.length || '...'}
-        </span>
-      </button>
+      {activeTab === 'classify' && (<>
 
-      {showClassifyPanel && (
-        <div id="classify-rules-panel" className="bg-white border border-[#b4c5ff] rounded-xl shadow-sm p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[15px] font-bold text-[#1c1e2b] flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px] text-[#004ac6]">category</span>
-              错误分类规则管理
-            </h3>
+      {/* Classify Rules Management Panel */}
+      <div className="bg-white border border-[#b4c5ff] rounded-xl shadow-sm p-5 space-y-4">
+        <h3 className="text-[15px] font-bold text-[#1c1e2b] flex items-center gap-2">
+          <span className="material-symbols-outlined text-[20px] text-[#004ac6]">category</span>
+          错误分类规则管理
+          <span className="text-[10px] px-1.5 py-0.5 bg-[#004ac6] text-white rounded-full ml-2">
+            {classifyRules.length || '...'}
+          </span>
+        </h3>
+
+        {/* Add / Edit rule form */}
+        <div className="bg-[#f8f9fc] border border-[#e0e3e5] rounded-lg p-4 space-y-3">
+          <h4 className="text-[13px] font-bold text-[#004ac6]">
+            {editingClassifyRule ? '编辑分类规则' : '添加新分类规则'}
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-[#434655]">关键词 *</label>
+              <input
+                type="text"
+                value={editingClassifyRule ? editingClassifyRule.keyword : newClassifyKeyword}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, keyword: e.target.value })
+                  : setNewClassifyKeyword(e.target.value)
+                }
+                placeholder="如: model_not_found"
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-[#434655]">状态码 (0=不限)</label>
+              <input
+                type="number"
+                value={editingClassifyRule ? editingClassifyRule.status_code : newClassifyStatusCode}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, status_code: Number(e.target.value) })
+                  : setNewClassifyStatusCode(Number(e.target.value))
+                }
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-[#434655]">主分类</label>
+              <select
+                value={editingClassifyRule ? editingClassifyRule.category : newClassifyCategory}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, category: e.target.value })
+                  : setNewClassifyCategory(e.target.value)
+                }
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              >
+                <option value="5xx 服务器错误">5xx 服务器错误</option>
+                <option value="4xx 客户端错误">4xx 客户端错误</option>
+                <option value="400 参数格式错误">400 参数格式错误</option>
+                <option value="401 鉴权错误">401 鉴权错误</option>
+                <option value="403 权限错误">403 权限错误</option>
+                <option value="429 频率限制">429 频率限制</option>
+                <option value="其他参数/网络错误">其他参数/网络错误</option>
+              </select>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-[11px] font-semibold text-[#434655]">子分类 *</label>
+              <input
+                type="text"
+                value={editingClassifyRule ? editingClassifyRule.sub_category : newClassifySubCategory}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, sub_category: e.target.value })
+                  : setNewClassifySubCategory(e.target.value)
+                }
+                placeholder="如: 404 - Model Not Found"
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className="text-[11px] font-semibold text-[#434655]">建议操作</label>
+              <input
+                type="text"
+                value={editingClassifyRule ? editingClassifyRule.recommendation : newClassifyRecommendation}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, recommendation: e.target.value })
+                  : setNewClassifyRecommendation(e.target.value)
+                }
+                placeholder="如: 检查模型名称或路由配置是否正确"
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-[#434655]">优先级 (越大越优先)</label>
+              <input
+                type="number"
+                value={editingClassifyRule ? editingClassifyRule.priority : newClassifyPriority}
+                onChange={(e) => editingClassifyRule
+                  ? setEditingClassifyRule({ ...editingClassifyRule, priority: Number(e.target.value) })
+                  : setNewClassifyPriority(Number(e.target.value))
+                }
+                className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            {editingClassifyRule && (
+              <button
+                onClick={() => setEditingClassifyRule(null)}
+                className="px-4 py-1.5 text-[12px] text-[#737686] hover:text-[#191c1e] font-medium rounded-lg"
+              >
+                取消
+              </button>
+            )}
             <button
-              onClick={() => setShowClassifyPanel(false)}
-              className="text-[#80848f] hover:text-[#1c1e2b]"
+              onClick={editingClassifyRule ? handleUpdateClassifyRule : handleAddClassifyRule}
+              className="px-4 py-1.5 bg-[#004ac6] text-white text-[12px] font-medium rounded-lg hover:opacity-90"
             >
-              <span className="material-symbols-outlined text-[20px]">close</span>
+              {editingClassifyRule ? '保存修改' : '添加规则'}
             </button>
           </div>
-
-          {/* Add / Edit rule form */}
-          <div className="bg-[#f8f9fc] border border-[#e0e3e5] rounded-lg p-4 space-y-3">
-            <h4 className="text-[13px] font-bold text-[#004ac6]">
-              {editingClassifyRule ? '编辑分类规则' : '添加新分类规则'}
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-[#434655]">关键词 *</label>
-                <input
-                  type="text"
-                  value={editingClassifyRule ? editingClassifyRule.keyword : newClassifyKeyword}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, keyword: e.target.value })
-                    : setNewClassifyKeyword(e.target.value)
-                  }
-                  placeholder="如: model_not_found"
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-[#434655]">状态码 (0=不限)</label>
-                <input
-                  type="number"
-                  value={editingClassifyRule ? editingClassifyRule.status_code : newClassifyStatusCode}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, status_code: Number(e.target.value) })
-                    : setNewClassifyStatusCode(Number(e.target.value))
-                  }
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-[#434655]">主分类</label>
-                <select
-                  value={editingClassifyRule ? editingClassifyRule.category : newClassifyCategory}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, category: e.target.value })
-                    : setNewClassifyCategory(e.target.value)
-                  }
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                >
-                  <option value="5xx 服务器错误">5xx 服务器错误</option>
-                  <option value="4xx 客户端错误">4xx 客户端错误</option>
-                  <option value="400 参数格式错误">400 参数格式错误</option>
-                  <option value="401 鉴权错误">401 鉴权错误</option>
-                  <option value="403 权限错误">403 权限错误</option>
-                  <option value="429 频率限制">429 频率限制</option>
-                  <option value="其他参数/网络错误">其他参数/网络错误</option>
-                </select>
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-[11px] font-semibold text-[#434655]">子分类 *</label>
-                <input
-                  type="text"
-                  value={editingClassifyRule ? editingClassifyRule.sub_category : newClassifySubCategory}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, sub_category: e.target.value })
-                    : setNewClassifySubCategory(e.target.value)
-                  }
-                  placeholder="如: 404 - Model Not Found"
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                />
-              </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label className="text-[11px] font-semibold text-[#434655]">建议操作</label>
-                <input
-                  type="text"
-                  value={editingClassifyRule ? editingClassifyRule.recommendation : newClassifyRecommendation}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, recommendation: e.target.value })
-                    : setNewClassifyRecommendation(e.target.value)
-                  }
-                  placeholder="如: 检查模型名称或路由配置是否正确"
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-[#434655]">优先级 (越大越优先)</label>
-                <input
-                  type="number"
-                  value={editingClassifyRule ? editingClassifyRule.priority : newClassifyPriority}
-                  onChange={(e) => editingClassifyRule
-                    ? setEditingClassifyRule({ ...editingClassifyRule, priority: Number(e.target.value) })
-                    : setNewClassifyPriority(Number(e.target.value))
-                  }
-                  className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              {editingClassifyRule && (
-                <button
-                  onClick={() => setEditingClassifyRule(null)}
-                  className="px-4 py-1.5 text-[12px] text-[#737686] hover:text-[#191c1e] font-medium rounded-lg"
-                >
-                  取消
-                </button>
-              )}
-              <button
-                onClick={editingClassifyRule ? handleUpdateClassifyRule : handleAddClassifyRule}
-                className="px-4 py-1.5 bg-[#004ac6] text-white text-[12px] font-medium rounded-lg hover:opacity-90"
-              >
-                {editingClassifyRule ? '保存修改' : '添加规则'}
-              </button>
-            </div>
-          </div>
-
-          {/* Rules list */}
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {classifyRules.length === 0 ? (
-              <p className="text-[12px] text-[#80848f] text-center py-4">暂无分类规则，启动时会自动写入默认规则</p>
-            ) : (
-              classifyRules.map((rule) => (
-                <div
-                  key={rule.id}
-                  className="flex items-center justify-between bg-[#f8f9fc] border border-[#e0e3e5] rounded-lg px-4 py-2.5 hover:border-[#b4c5ff] transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
-                      rule.status_code >= 500 ? 'bg-[#ffe0e0] text-[#c62828]' :
-                      rule.status_code >= 400 ? 'bg-[#fff3e0] text-[#e65100]' :
-                      rule.status_code > 0 ? 'bg-[#fff9c4] text-[#f57f17]' :
-                      'bg-[#e8eaf6] text-[#283593]'
-                    }`}>
-                      {rule.status_code || '*'}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold text-[#1c1e2b] truncate">{rule.keyword}</div>
-                      <div className="text-[11px] text-[#80848f] truncate">{rule.sub_category}</div>
-                    </div>
-                    <span className="text-[10px] text-[#80848f] bg-[#e0e3e5] px-1.5 py-0.5 rounded whitespace-nowrap">
-                      P{rule.priority}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => setEditingClassifyRule(rule)}
-                      className="p-1.5 text-[#80848f] hover:text-[#004ac6] hover:bg-[#d0e1fb] rounded-lg transition-colors flex-shrink-0"
-                      title="编辑"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClassifyRule(rule.id)}
-                      className="p-1.5 text-[#80848f] hover:text-[#c62828] hover:bg-[#ffe0e0] rounded-lg transition-colors flex-shrink-0"
-                      title="删除"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
         </div>
-      )}
+
+        {/* Rules list */}
+        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+          {classifyRules.length === 0 ? (
+            <p className="text-[12px] text-[#80848f] text-center py-4">暂无分类规则，启动时会自动写入默认规则</p>
+          ) : (
+            classifyRules.map((rule) => (
+              <div
+                key={rule.id}
+                className="flex items-center justify-between bg-[#f8f9fc] border border-[#e0e3e5] rounded-lg px-4 py-2.5 hover:border-[#b4c5ff] transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${
+                    rule.status_code >= 500 ? 'bg-[#ffe0e0] text-[#c62828]' :
+                    rule.status_code >= 400 ? 'bg-[#fff3e0] text-[#e65100]' :
+                    rule.status_code > 0 ? 'bg-[#fff9c4] text-[#f57f17]' :
+                    'bg-[#e8eaf6] text-[#283593]'
+                  }`}>
+                    {rule.status_code || '*'}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-semibold text-[#1c1e2b] truncate">{rule.keyword}</div>
+                    <div className="text-[11px] text-[#80848f] truncate">{rule.sub_category}</div>
+                  </div>
+                  <span className="text-[10px] text-[#80848f] bg-[#e0e3e5] px-1.5 py-0.5 rounded whitespace-nowrap">
+                    P{rule.priority}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setEditingClassifyRule(rule)}
+                    className="p-1.5 text-[#80848f] hover:text-[#004ac6] hover:bg-[#d0e1fb] rounded-lg transition-colors flex-shrink-0"
+                    title="编辑"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClassifyRule(rule.id)}
+                    className="p-1.5 text-[#80848f] hover:text-[#c62828] hover:bg-[#ffe0e0] rounded-lg transition-colors flex-shrink-0"
+                    title="删除"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      </>)}
       
       {/* 错误详情弹窗 */}
       {detailModalItem && (
