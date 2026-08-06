@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -101,17 +102,29 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 
 	resp, err := n.client.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
+		n.logger.Error("webhook post failed",
+			zap.String("url", webhookURL),
+			zap.String("body", string(body)),
+			zap.Error(err))
 		return fmt.Errorf("post webhook: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		n.logger.Error("webhook non-200 response",
+			zap.Int("status", resp.StatusCode),
+			zap.String("body", string(respBody)),
+			zap.String("request_body", string(body)))
+		return fmt.Errorf("webhook returned status %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
+	// 读取成功响应体，飞书可能返回业务错误
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	n.logger.Info("feishu alert sent",
 		zap.String("rule_name", msg.RuleName),
-		zap.Int("match_count", msg.MatchCount))
+		zap.Int("match_count", msg.MatchCount),
+		zap.String("response", string(respBody)))
 
 	return nil
 }

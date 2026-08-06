@@ -9,11 +9,19 @@ import (
 	"go.uber.org/zap"
 )
 
-func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, logger *zap.Logger, authCfg config.AuthConfig) {
+func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *store.ErrorScanStore, logStore *store.LogStore, classifyStore *store.ErrorClassifyStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, errorScanner *engine.ErrorScanner, logger *zap.Logger, authCfg config.AuthConfig) {
 	ruleHandler := &RuleHandler{
 		store:  ruleStore,
 		engine: alertEngine,
 		logger: logger,
+	}
+
+	errorScanHandler := &ErrorScanHandler{
+		store:         errorScanStore,
+		logStore:      logStore,
+		classifyStore: classifyStore,
+		scanner:       errorScanner,
+		logger:        logger,
 	}
 
 	channelHandler := &ChannelHandler{
@@ -41,5 +49,32 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, channelStore *sto
 
 		api.GET("/channels", channelHandler.ListChannels)
 		api.GET("/channels/with-models", channelHandler.ListChannelsWithModels)
+
+		// 错误扫描规则
+		api.GET("/error-scan", errorScanHandler.List)
+		api.POST("/error-scan", errorScanHandler.Create)
+		api.PUT("/error-scan/:id", errorScanHandler.Update)
+		api.DELETE("/error-scan/:id", errorScanHandler.Delete)
+		api.POST("/error-scan/:id/toggle-alert", errorScanHandler.ToggleAlert)
+		api.POST("/error-scan/:id/toggle-suppressed", errorScanHandler.ToggleSuppressed)
+		api.POST("/error-scan/:id/feishu-webhook", errorScanHandler.UpdateFeishuWebhook)
+		api.POST("/error-scan/bulk-feishu-webhook", errorScanHandler.BulkUpdateFeishuWebhook)
+		api.POST("/error-scan/:id/granularity", errorScanHandler.UpdateGranularity)
+		api.POST("/error-scan/:id/threshold-excludes", errorScanHandler.UpdateThresholdAndExcludes)
+		api.GET("/error-scan/poll-interval", errorScanHandler.GetPollInterval)
+		api.POST("/error-scan/poll-interval", errorScanHandler.SetPollInterval)
+		api.POST("/error-scan/test-webhook", errorScanHandler.TestWebhook)
+		api.POST("/error-scan/trigger-scan", errorScanHandler.TriggerScan)
+		api.GET("/error-scan/recent-samples", errorScanHandler.GetRecentErrorSamples)
+		api.GET("/error-scan/overview", errorScanHandler.GetOverview)
+		api.GET("/error-scan/unmatched-samples", errorScanHandler.GetUnmatchedSamples)
+		api.POST("/error-scan/create-from-sample", errorScanHandler.CreateFromSample)
+		api.GET("/error-scan/fallback-config", errorScanHandler.GetFallbackConfig)
+		api.POST("/error-scan/fallback-config", errorScanHandler.SetFallbackConfig)
+		api.GET("/error-scan/grouped-stats", errorScanHandler.GetGroupedStats)
+		api.POST("/error-scan/classify-log", errorScanHandler.ClassifyLog)
+		api.GET("/error-scan/classify-rules", errorScanHandler.ListClassifyRules)
+		api.POST("/error-scan/classify-rules", errorScanHandler.CreateClassifyRule)
+		api.DELETE("/error-scan/classify-rules/:id", errorScanHandler.DeleteClassifyRule)
 	}
 }

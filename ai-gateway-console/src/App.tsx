@@ -15,6 +15,7 @@ import { NotificationChannelsView } from './components/NotificationChannelsView'
 import { ApiKeysView } from './components/ApiKeysView';
 import { DashboardView } from './components/DashboardView';
 import { SettingsView } from './components/SettingsView';
+import { ErrorScanAlertsView } from './components/ErrorScanAlertsView';
 import { DocModal } from './components/DocModal';
 import { SupportModal } from './components/SupportModal';
 
@@ -27,13 +28,25 @@ import {
   disableRule,
   setToken,
   hasToken,
+  listErrorScanRules,
+  createErrorScanRule,
+  deleteErrorScanRule,
+  toggleErrorScanAlert,
+  toggleErrorScanSuppressed,
+  updateErrorScanFeishu,
+  bulkUpdateErrorScanFeishu,
+  updateErrorScanGranularity,
+  updateErrorScanThresholdExcludes,
 } from './api/rules';
-import { AlertRule, ApiKey, AlertLog, MainTab, HeaderSubTab } from './types';
+import { AlertRule, ApiKey, AlertLog, MainTab, HeaderSubTab, ErrorScanCategory } from './types';
 import LoginPage from './components/LoginPage';
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(hasToken());
-  const [activeMainTab, setActiveMainTab] = useState<MainTab>('alert-rules');
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>(() => {
+    const saved = localStorage.getItem('activeMainTab');
+    return (saved as MainTab) || 'alert-rules';
+  });
   const [headerSubTab, setHeaderSubTab] = useState<HeaderSubTab>('Rules');
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -45,6 +58,9 @@ export default function App() {
 
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [logs, setLogs] = useState<AlertLog[]>([]);
+
+  // Error Scan Categories state
+  const [errorScanCategories, setErrorScanCategories] = useState<ErrorScanCategory[]>([]);
 
   // Modal Control States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -79,9 +95,21 @@ export default function App() {
     }
   }, []);
 
+  const loadErrorScanRules = useCallback(async () => {
+    try {
+      const data = await listErrorScanRules();
+      setErrorScanCategories(data);
+    } catch {
+      // 静默降级
+    }
+  }, []);
+
   useEffect(() => {
-    if (authenticated) loadRules();
-  }, [loadRules, authenticated]);
+    if (authenticated) {
+      loadRules();
+      loadErrorScanRules();
+    }
+  }, [loadRules, loadErrorScanRules, authenticated]);
 
   if (!authenticated) {
     return <LoginPage onLogin={handleLogin} />;
@@ -168,6 +196,97 @@ export default function App() {
     showToast(`Triggered "${rule.name}" & sent alert payload to webhook!`);
   };
 
+  // ── Error Scan Category Handlers ──
+
+  const handleToggleErrorScanAlert = async (id: string) => {
+    try {
+      await toggleErrorScanAlert(id);
+      await loadErrorScanRules();
+      showToast('告警状态已切换');
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
+  const handleToggleErrorScanSuppressed = async (id: string) => {
+    try {
+      await toggleErrorScanSuppressed(id);
+      await loadErrorScanRules();
+      showToast('误报标记已切换');
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
+  const handleUpdateErrorScanGranularity = async (
+    id: string,
+    scanGranularity: import('./types').ScanGranularity,
+    alertGranularity: import('./types').AlertGranularity
+  ) => {
+    try {
+      await updateErrorScanGranularity(id, scanGranularity, alertGranularity);
+      await loadErrorScanRules();
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
+  const handleAddScanCategory = async (category: Omit<ErrorScanCategory, 'id' | 'lastScannedTime'>) => {
+    try {
+      await createErrorScanRule(category);
+      await loadErrorScanRules();
+      showToast(`已成功添加错误扫描分类: "${category.name}"`);
+    } catch (err: any) {
+      showToast(`添加失败: ${err.message}`);
+    }
+  };
+
+  const handleUpdateFeishuWebhookUrl = async (id: string, url: string) => {
+    try {
+      await updateErrorScanFeishu(id, url);
+      await loadErrorScanRules();
+      showToast('飞书地址已更新');
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
+  const handleBulkUpdateFeishuWebhookUrl = async (url: string) => {
+    try {
+      await bulkUpdateErrorScanFeishu(url);
+      await loadErrorScanRules();
+      showToast(`已成功同步覆盖全量规则的飞书地址`);
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
+  const handleDeleteScanCategory = async (id: string) => {
+    try {
+      await deleteErrorScanRule(id);
+      await loadErrorScanRules();
+      showToast('规则已删除');
+    } catch (err: any) {
+      showToast(`删除失败: ${err.message}`);
+    }
+  };
+
+  const handleUpdateThresholdExcludes = async (
+    id: string,
+    alertThreshold: number,
+    excludeChannels: string,
+    excludeUsers: string,
+    filterMode: string
+  ) => {
+    try {
+      await updateErrorScanThresholdExcludes(id, alertThreshold, excludeChannels, excludeUsers, filterMode);
+      await loadErrorScanRules();
+      showToast('阈值与排除列表已更新');
+    } catch (err: any) {
+      showToast(`操作失败: ${err.message}`);
+    }
+  };
+
   // Notification / API Key actions kept as no-ops (no backend)
   const handleGenerateKey = () => showToast('API Key management coming soon.');
   const handleRevokeKey = () => showToast('API Key management coming soon.');
@@ -185,6 +304,23 @@ export default function App() {
             setEditingRule(null);
             setIsCreateModalOpen(true);
           }}
+        />
+      );
+    }
+
+    if (activeMainTab === 'error-scan') {
+      return (
+        <ErrorScanAlertsView
+          categories={errorScanCategories}
+          onToggleAlertEnabled={handleToggleErrorScanAlert}
+          onToggleSuppressed={handleToggleErrorScanSuppressed}
+          onUpdateGranularity={handleUpdateErrorScanGranularity}
+          onUpdateThresholdExcludes={handleUpdateThresholdExcludes}
+          onAddScanCategory={handleAddScanCategory}
+          onDeleteScanCategory={handleDeleteScanCategory}
+          onUpdateFeishuWebhookUrl={handleUpdateFeishuWebhookUrl}
+          onBulkUpdateFeishuWebhookUrl={handleBulkUpdateFeishuWebhookUrl}
+          onShowToast={showToast}
         />
       );
     }
@@ -242,6 +378,7 @@ export default function App() {
         activeTab={activeMainTab}
         setActiveTab={(tab) => {
           setActiveMainTab(tab);
+          localStorage.setItem('activeMainTab', tab);
           if (tab === 'alert-rules') setHeaderSubTab('Rules');
         }}
         onOpenDocs={() => setIsDocsOpen(true)}

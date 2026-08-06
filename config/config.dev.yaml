@@ -1,0 +1,35 @@
+# ── tt-inspector 开发环境配置（develop 分支） ──
+server:
+  port: 9200
+  read_timeout: 30s
+  write_timeout: 30s
+
+# 业务数据库（渠道 / 模型查询）— 开发环境 MySQL
+database:
+  driver: "mysql"
+  dsn: "root:dev_mysql_password@tcp(dev-mysql-host:3306)/new-api?parseTime=true"
+  max_open_conns: 10
+  max_idle_conns: 5
+
+# 告警平台数据库（告警规则存储 + 日志查询）— 开发环境 PostgreSQL
+log_database:
+  driver: "postgres"
+  dsn: "postgresql://root:dev_pg_password@dev-pg-host:5432/new_api?sslmode=disable"
+  max_open_conns: 10
+  max_idle_conns: 5
+
+engine:
+  poll_interval: 30s
+  rule_reload_interval: 60s
+  error_scan_poll_interval: 60s
+  default_window_sec: 300
+  default_cooldown_sec: 600
+  checkpoint_file: "data/checkpoint.json"
+
+logging:
+  level: "debug"
+  format: "json"
+
+auth:
+  jwt_secret: "tt-inspector-dev-jwt-secret-change-me"
+  admin_password: "DevAdmin@2026!"

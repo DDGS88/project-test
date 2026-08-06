@@ -87,19 +87,34 @@ func Run(cfg *config.Config) error {
 
 	// 仅在 logDB 上迁移告警规则表
 	if err := logDB.AutoMigrate(&store.AlertRule{}); err != nil {
-		return fmt.Errorf("auto migrate: %w", err)
+		return fmt.Errorf("auto migrate alert_rules: %w", err)
+	}
+	if err := logDB.AutoMigrate(&store.ErrorScanRule{}); err != nil {
+		return fmt.Errorf("auto migrate error_scan_rules: %w", err)
+	}
+	if err := logDB.AutoMigrate(&store.ErrorClassifyRule{}); err != nil {
+		return fmt.Errorf("auto migrate error_classify_rules: %w", err)
 	}
 
 	// stores: rule + log 用 logDB，channel 用 businessDB
 	ruleStore := store.NewRuleStore(logDB)
+	errorScanStore := store.NewErrorScanStore(logDB)
+	classifyStore := store.NewErrorClassifyStore(logDB)
+	if err := classifyStore.SeedDefaults(); err != nil {
+		logger.Warn("seed classify defaults failed", zap.Error(err))
+	}
 	logStore := store.NewLogStore(logDB)
 	channelStore := store.NewChannelStore(businessDB)
 	feishuNotifier := notifier.NewFeishuNotifier(logger)
 	alertEngine := engine.NewEngine(logDB, ruleStore, logStore, feishuNotifier, cfg.Engine, logger)
 
+	errorScanner := engine.NewErrorScanner(logDB, errorScanStore, feishuNotifier, logger,
+		cfg.Engine.ErrorScanPollInterval, cfg.Engine.DefaultCooldownSec)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go alertEngine.Run(ctx)
+	go errorScanner.Run(ctx)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -112,7 +127,7 @@ func Run(cfg *config.Config) error {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	api.RegisterRoutes(r, ruleStore, channelStore, alertEngine, logger, cfg.Auth)
+	api.RegisterRoutes(r, ruleStore, errorScanStore, logStore, classifyStore, channelStore, alertEngine, errorScanner, logger, cfg.Auth)
 
 	if _, err := os.Stat("ai-gateway-console/dist"); err == nil {
 		r.Static("/assets", "ai-gateway-console/dist/assets")

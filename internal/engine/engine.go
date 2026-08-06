@@ -262,7 +262,7 @@ func (e *Engine) fetchSamples(rule *store.AlertRule, windowStart, windowEnd int6
 		cond.Field = "content"
 	}
 
-	rawSamples, err := e.logStore.GetRegexSamples(windowStart, windowEnd, cond.ChannelId, cond.Field, cond.Pattern, cond.ModelName, cond.Negate, cond.ExcludeEmpty)
+	rawSamples, err := e.logStore.GetRegexSamples(windowStart, windowEnd, cond.ChannelId, cond.Field, cond.Pattern, cond.ModelName, cond.Negate, cond.ExcludeEmpty, cond.LogType)
 	if err != nil {
 		e.logger.Warn("failed to fetch samples", zap.Error(err))
 		return nil
@@ -285,6 +285,7 @@ type LogMatchRequest struct {
 	ChannelId   int    `json:"channel_id"`
 	Pattern     string `json:"pattern"`
 	Field       string `json:"field"`
+	LogType     int    `json:"log_type"`
 	WindowStart int64  `json:"window_start"`
 	WindowEnd   int64  `json:"window_end"`
 }
@@ -306,7 +307,7 @@ func (e *Engine) TestMatch(req *LogMatchRequest) *LogMatchResponse {
 		if field == "" {
 			field = "content"
 		}
-		count, err = e.logStore.CountRegex(req.WindowStart, req.WindowEnd, req.ChannelId, field, req.Pattern, "", false, false)
+		count, err = e.logStore.CountRegex(req.WindowStart, req.WindowEnd, req.ChannelId, field, req.Pattern, "", false, false, req.LogType)
 	default:
 		return &LogMatchResponse{Error: fmt.Sprintf("unsupported rule type: %s", req.RuleType)}
 	}

@@ -12,6 +12,7 @@ type RegexCondition struct {
 	Pattern      string `json:"pattern"`
 	Field        string `json:"field"`
 	ModelName    string `json:"model_name"`
+	LogType      int    `json:"log_type"`      // 日志类型过滤，0表示不过滤，5表示上游错误
 	Negate       bool   `json:"negate"`        // 反向匹配（SQL 用 NOT ~* / NOT REGEXP）
 	ExcludeEmpty bool   `json:"exclude_empty"` // 排除空字符串
 }
@@ -30,5 +31,5 @@ func (r *RegexRule) Evaluate(db *gorm.DB, rule *store.AlertRule, windowStart, wi
 	}
 
 	logStore := store.NewLogStore(db)
-	return logStore.CountRegex(windowStart, windowEnd, cond.ChannelId, cond.Field, cond.Pattern, cond.ModelName, cond.Negate, cond.ExcludeEmpty)
+	return logStore.CountRegex(windowStart, windowEnd, cond.ChannelId, cond.Field, cond.Pattern, cond.ModelName, cond.Negate, cond.ExcludeEmpty, cond.LogType)
 }

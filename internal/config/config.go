@@ -35,11 +35,12 @@ type DatabaseConfig struct {
 }
 
 type EngineConfig struct {
-	PollInterval       time.Duration `mapstructure:"poll_interval"`
-	RuleReloadInterval time.Duration `mapstructure:"rule_reload_interval"`
-	DefaultWindowSec   int           `mapstructure:"default_window_sec"`
-	DefaultCooldownSec int           `mapstructure:"default_cooldown_sec"`
-	CheckpointFile     string        `mapstructure:"checkpoint_file"`
+	PollInterval          time.Duration `mapstructure:"poll_interval"`
+	RuleReloadInterval    time.Duration `mapstructure:"rule_reload_interval"`
+	ErrorScanPollInterval time.Duration `mapstructure:"error_scan_poll_interval"`
+	DefaultWindowSec      int           `mapstructure:"default_window_sec"`
+	DefaultCooldownSec    int           `mapstructure:"default_cooldown_sec"`
+	CheckpointFile        string        `mapstructure:"checkpoint_file"`
 }
 
 type LoggingConfig struct {
@@ -91,6 +92,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Engine.DefaultCooldownSec == 0 {
 		cfg.Engine.DefaultCooldownSec = 600
+	}
+	if cfg.Engine.ErrorScanPollInterval == 0 {
+		cfg.Engine.ErrorScanPollInterval = 60 * time.Second
 	}
 	if cfg.Engine.CheckpointFile == "" {
 		cfg.Engine.CheckpointFile = "checkpoint.json"

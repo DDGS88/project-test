@@ -1,0 +1,21 @@
+# ── tt-inspector 部署用 docker-compose ──
+# 放在目标服务器 /opt/tt-inspector/ 目录下
+# GitHub Actions 部署时会自动拉取最新镜像并重启
+
+services:
+  tt-inspector:
+    image: ${IMAGE}:${TAG}
+    container_name: tt-inspector
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data:/app/data
+    networks:
+      - tt-network
+
+networks:
+  tt-network:
+    driver: bridge

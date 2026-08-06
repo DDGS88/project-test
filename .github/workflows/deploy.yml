@@ -1,0 +1,91 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "ENV=prod" >> $GITHUB_OUTPUT
+            echo "TAG=prod-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          else
+            echo "ENV=dev" >> $GITHUB_OUTPUT
+            echo "TAG=dev-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Select environment config
+        run: |
+          echo "Using config/config.${{ steps.env.outputs.ENV }}.yaml"
+          cp config/config.${{ steps.env.outputs.ENV }}.yaml config/config.yaml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.TAG }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.ENV }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── 部署到开发服务器（develop 分支） ──
+      - name: Deploy to Dev server
+        if: github.ref == 'refs/heads/develop'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 43.156.153.171
+          port: 36000
+          username: root
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          script: |
+            cd /opt/tt-inspector
+            echo "TAG=${{ steps.env.outputs.TAG }}" > .env.tag
+            echo "IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> .env.tag
+            docker compose -f docker-compose.deploy.yaml pull
+            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+
+      # ── 部署到生产服务器（main 分支） ──
+      - name: Deploy to Prod server
+        if: github.ref == 'refs/heads/main'
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 43.156.153.171
+          port: 36000
+          username: root
+          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
+          script: |
+            cd /opt/tt-inspector
+            echo "TAG=${{ steps.env.outputs.TAG }}" > .env.tag
+            echo "IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> .env.tag
+            docker compose -f docker-compose.deploy.yaml pull
+            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
