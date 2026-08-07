@@ -215,7 +215,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Overview stats state
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
-  const [overviewWindow, setOverviewWindow] = useState(24);
+  const [overviewWindow, setOverviewWindow] = useState(1);
 
   // Unmatched samples state
   const [unmatchedSamples, setUnmatchedSamples] = useState<UnmatchedSample[]>([]);

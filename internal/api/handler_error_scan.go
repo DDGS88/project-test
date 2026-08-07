@@ -323,7 +323,7 @@ func (h *ErrorScanHandler) GetOverview(c *gin.Context) {
 		}
 	}
 
-	windowHours := 24
+	windowHours := 1
 	if wh := c.Query("window"); wh != "" {
 		if v, err := strconv.Atoi(wh); err == nil && v > 0 {
 			windowHours = v
