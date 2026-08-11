@@ -64,6 +64,7 @@ interface ErrorScanAlertsViewProps {
   onUpdateFeishuWebhookUrl?: (id: string, url: string) => void;
   onBulkUpdateFeishuWebhookUrl?: (url: string) => void;
   onShowToast: (msg: string) => void;
+  onSyncScanCategoryFromClassify?: (patternKeyword: string, updates: { subCategory?: string; category?: string; statusCode?: number }) => void;
 }
 
 // Preset User Example Logs from prompt for immediate testing
@@ -159,6 +160,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   onUpdateFeishuWebhookUrl,
   onBulkUpdateFeishuWebhookUrl,
   onShowToast,
+  onSyncScanCategoryFromClassify,
 }) => {
   // Global View Controls
   const [globalScanGranularity, setGlobalScanGranularity] = useState<ScanGranularity>('小时 (Hourly)');
@@ -175,12 +177,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Filter States
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'alerting' | 'suppressed' | 'disabled'>('all');
-  const [userFilter, setUserFilter] = useState<string>('all');
-  const [channelFilter, setChannelFilter] = useState<string>('all');
 
   // Tab navigation
   const [activeTab, setActiveTab] = useState<'dashboard' | 'classify' | 'alert'>('dashboard');
-  const [modelFilter, setModelFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isScanning, setIsScanning] = useState<boolean>(false);
 
@@ -242,6 +241,28 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [newClassifyPriority, setNewClassifyPriority] = useState(50);
   const [editingClassifyRule, setEditingClassifyRule] = useState<ClassifyRule | null>(null);
   const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
+
+  // 兼容非 HTTPS 环境的复制到剪贴板
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // fallback below
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  };
+  const fallbackCopy = (text: string) => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  };
 
   useEffect(() => {
     getErrorScanPollInterval().then(setPollIntervalSeconds).catch(() => {});
@@ -312,9 +333,15 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       onShowToast('关键词和子分类不能为空');
       return;
     }
+    // 检查关键词是否已存在
+    const keywordLower = newClassifyKeyword.trim().toLowerCase();
+    if (classifyRules.some((r) => r.keyword.toLowerCase() === keywordLower)) {
+      onShowToast(`关键词「${newClassifyKeyword.trim()}」已存在，每个关键词只能有一个分类规则`);
+      return;
+    }
     try {
       await createClassifyRule({
-        keyword: newClassifyKeyword,
+        keyword: newClassifyKeyword.trim(),
         status_code: newClassifyStatusCode,
         category: newClassifyCategory,
         sub_category: newClassifySubCategory,
@@ -345,17 +372,33 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   const handleUpdateClassifyRule = async () => {
     if (!editingClassifyRule) return;
+    // 检查修改后的关键词是否与其他规则冲突（排除自身）
+    const keywordLower = editingClassifyRule.keyword.trim().toLowerCase();
+    if (classifyRules.some(
+      (r) => r.id !== editingClassifyRule.id && r.keyword.toLowerCase() === keywordLower
+    )) {
+      onShowToast(`关键词「${editingClassifyRule.keyword.trim()}」已存在，每个关键词只能有一个分类规则`);
+      return;
+    }
     try {
       await updateClassifyRule(editingClassifyRule.id, {
-        keyword: editingClassifyRule.keyword,
+        keyword: editingClassifyRule.keyword.trim(),
         status_code: editingClassifyRule.status_code,
         category: editingClassifyRule.category,
         sub_category: editingClassifyRule.sub_category,
         recommendation: editingClassifyRule.recommendation,
         priority: editingClassifyRule.priority,
       });
+      // 同步更新关联的精细化规则
+      if (onSyncScanCategoryFromClassify) {
+        onSyncScanCategoryFromClassify(editingClassifyRule.keyword.trim(), {
+          subCategory: editingClassifyRule.sub_category,
+          category: editingClassifyRule.category,
+          statusCode: editingClassifyRule.status_code,
+        });
+      }
       setEditingClassifyRule(null);
-      onShowToast('分类规则已更新');
+      onShowToast('分类规则已更新，已同步关联的精细化规则');
       loadClassifyRules();
     } catch (e: any) {
       onShowToast(`更新失败: ${e.message}`);
@@ -402,31 +445,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     requestPath: string;
     recommendation: string;
   } | null>(null);
-
-  // 从 categories 中的真实日志数据提取去重的模型/渠道/用户组（无硬编码兜底）
-  const availableModels = Array.from(
-    new Set(
-      categories
-        .flatMap((c) => [c.topModel, ...c.rawLogs.map((l) => l.model_name)])
-        .filter(Boolean)
-    )
-  );
-
-  const availableChannels = Array.from(
-    new Set(
-      categories
-        .flatMap((c) => [c.topChannel, ...c.rawLogs.map((l) => l.channel_name)])
-        .filter(Boolean)
-    )
-  );
-
-  const availableUsersAndGroups = Array.from(
-    new Set(
-      categories
-        .flatMap((c) => [c.topUser, ...c.rawLogs.flatMap((l) => [l.username, l.group])])
-        .filter(Boolean)
-    )
-  );
 
   // Add Form States
   const [newCode, setNewCode] = useState('');
@@ -659,30 +677,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       matchesStatus = !item.isAlertEnabled && !item.suppressed;
     }
 
-    // Dimension Filters (User, Channel, Model)
-    const matchesModel =
-      modelFilter === 'all' ||
-      item.topModel === modelFilter ||
-      item.rawLogs.some((l) => l.model_name === modelFilter);
-
-    const matchesChannel =
-      channelFilter === 'all' ||
-      item.topChannel === channelFilter ||
-      item.rawLogs.some((l) => l.channel_name === channelFilter);
-
-    const matchesUser =
-      userFilter === 'all' ||
-      item.topUser === userFilter ||
-      item.rawLogs.some((l) => l.username === userFilter || l.group === userFilter);
-
-    return (
-      matchesSearch &&
-      matchesCategory &&
-      matchesStatus &&
-      matchesModel &&
-      matchesChannel &&
-      matchesUser
-    );
+    return matchesSearch && matchesCategory && matchesStatus;
   });
 
   // Calculate Metrics
@@ -1604,62 +1599,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
               <option value="suppressed">🔕 已误报忽略 (Suppressed)</option>
               <option value="disabled">⚪ 未开启告警 (Alert Disabled)</option>
             </select>
-
-            {/* Model Dimension Filter */}
-            <select
-              value={modelFilter}
-              onChange={(e) => setModelFilter(e.target.value)}
-              className="bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] font-medium text-[#191c1e] outline-none focus:ring-2 focus:ring-[#004ac6]"
-            >
-              <option value="all">🤖 全部模型维度 (All Models)</option>
-              {availableModels.map((m) => (
-                <option key={m} value={m}>
-                  模型: {m}
-                </option>
-              ))}
-            </select>
-
-            {/* Channel Dimension Filter */}
-            <select
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value)}
-              className="bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] font-medium text-[#191c1e] outline-none focus:ring-2 focus:ring-[#004ac6]"
-            >
-              <option value="all">📡 全部渠道维度 (All Channels)</option>
-              {availableChannels.map((ch) => (
-                <option key={ch} value={ch}>
-                  渠道: {ch}
-                </option>
-              ))}
-            </select>
-
-            {/* User / Group Dimension Filter */}
-            <select
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-              className="bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] font-medium text-[#191c1e] outline-none focus:ring-2 focus:ring-[#004ac6]"
-            >
-              <option value="all">👤 全部用户/组维度 (All Users/Groups)</option>
-              {availableUsersAndGroups.map((u) => (
-                <option key={u} value={u}>
-                  用户/组: {u}
-                </option>
-              ))}
-            </select>
-
-            {(modelFilter !== 'all' || channelFilter !== 'all' || userFilter !== 'all') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setModelFilter('all');
-                  setChannelFilter('all');
-                  setUserFilter('all');
-                }}
-                className="text-[11px] font-bold text-[#ba1a1a] hover:underline bg-[#ffdad6] px-2 py-1 rounded-md"
-              >
-                重置维度筛选
-              </button>
-            )}
           </div>
 
           {/* Poll Interval & Search */}
@@ -1718,7 +1657,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                   />
                 </th>
                 <th className="py-3 px-4">精细化错误子类与规则代码</th>
-                <th className="py-3 px-4">受影响模型 / 渠道 / 组</th>
                 <th className="py-3 px-4">扫描与告警粒度</th>
                 <th className="py-3 px-4">排除 & 阈值设置</th>
                 <th className="py-3 px-4">关联飞书 Webhook 地址</th>
@@ -1730,7 +1668,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
             <tbody className="divide-y divide-[#e0e3e5]">
               {filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-[#737686]">
+                  <td colSpan={8} className="py-8 text-center text-[#737686]">
                     未找到匹配条件下的错误日志分类记录
                   </td>
                 </tr>
@@ -1795,13 +1733,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             HTTP {item.statusCode}
                           </span>
                         </div>
-                      </td>
-
-                      {/* Affected Model & Channel & Group */}
-                      <td className="py-3.5 px-4 text-[12px] space-y-0.5">
-                        <div className="font-medium text-[#191c1e]">🤖 {item.topModel}</div>
-                        <div className="font-mono text-[#004ac6] text-[11px]">📡 {item.topChannel}</div>
-                        <div className="text-[11px] text-[#737686]">� 用户: {item.topUser}</div>
                       </td>
 
                       {/* Granularities */}
@@ -2613,7 +2544,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                           <span className="text-[11px] font-semibold text-[#434655]">content:</span>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText(sample.content);
+                              copyToClipboard(sample.content);
                               onShowToast('已复制 content');
                             }}
                             className="text-[10px] text-[#004ac6] hover:underline"
@@ -2632,7 +2563,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             <span className="text-[11px] font-semibold text-[#434655]">other:</span>
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(sample.other);
+                                copyToClipboard(sample.other);
                                 onShowToast('已复制 other');
                               }}
                               className="text-[10px] text-[#004ac6] hover:underline"
@@ -2725,7 +2656,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                           <span className="text-[11px] font-semibold text-[#434655]">content:</span>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText(sample.content);
+                              copyToClipboard(sample.content);
                               onShowToast('已复制 content');
                             }}
                             className="text-[10px] text-[#004ac6] hover:underline"
@@ -2744,7 +2675,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             <span className="text-[11px] font-semibold text-[#434655]">other:</span>
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(sample.other);
+                                copyToClipboard(sample.other);
                                 onShowToast('已复制 other');
                               }}
                               className="text-[10px] text-[#004ac6] hover:underline"

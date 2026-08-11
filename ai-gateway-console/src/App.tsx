@@ -37,6 +37,7 @@ import {
   bulkUpdateErrorScanFeishu,
   updateErrorScanGranularity,
   updateErrorScanThresholdExcludes,
+  updateErrorScanRule,
 } from './api/rules';
 import { AlertRule, ApiKey, AlertLog, MainTab, HeaderSubTab, ErrorScanCategory } from './types';
 import LoginPage from './components/LoginPage';
@@ -295,6 +296,31 @@ export default function App() {
     }
   };
 
+  // 分类规则更新时同步精细化规则
+  const handleSyncScanCategoryFromClassify = async (
+    patternKeyword: string,
+    updates: { subCategory?: string; category?: string; statusCode?: number }
+  ) => {
+    const matched = errorScanCategories.filter(
+      (c) => c.patternKeyword.toLowerCase() === patternKeyword.toLowerCase()
+    );
+    if (matched.length === 0) return;
+    try {
+      await Promise.all(
+        matched.map((c) =>
+          updateErrorScanRule(c.id, {
+            subCategory: updates.subCategory || c.subCategory,
+            category: updates.category as ErrorScanCategory['category'] || c.category,
+            statusCode: updates.statusCode || c.statusCode,
+          } as Partial<ErrorScanCategory>)
+        )
+      );
+      await loadErrorScanRules();
+    } catch (err: any) {
+      showToast(`同步精细化规则失败: ${err.message}`);
+    }
+  };
+
   // Notification / API Key actions kept as no-ops (no backend)
   const handleGenerateKey = () => showToast('API Key management coming soon.');
   const handleRevokeKey = () => showToast('API Key management coming soon.');
@@ -329,6 +355,7 @@ export default function App() {
           onUpdateFeishuWebhookUrl={handleUpdateFeishuWebhookUrl}
           onBulkUpdateFeishuWebhookUrl={handleBulkUpdateFeishuWebhookUrl}
           onShowToast={showToast}
+          onSyncScanCategoryFromClassify={handleSyncScanCategoryFromClassify}
         />
       );
     }
