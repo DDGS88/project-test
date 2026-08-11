@@ -634,6 +634,24 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         name: convertName,
         category: convertCategory,
       });
+      // 从 content 提取关键词，同步创建分类规则，确保后续扫描能匹配该错误
+      let keyword = (convertingSample.content || '')
+        .replace(/^status_code[=:]\s*\d+[,.]\s*/, '')
+        .replace(/\s*\(request id:.*$/, '')
+        .replace(/,( request id:.*)?$/, '')
+        .trim();
+      if (keyword) {
+        const statusCodeMatch = (convertingSample.content || '').match(/status_code[=:]\s*(\d+)/);
+        const statusCode = statusCodeMatch ? parseInt(statusCodeMatch[1]) : 0;
+        createClassifyRule({
+          keyword,
+          status_code: statusCode,
+          category: convertCategory,
+          sub_category: convertName,
+          recommendation: convertCategory,
+          priority: 50,
+        }).catch(() => {});
+      }
       onShowToast(`已成功从样本创建规则「${convertName}」`);
       setConvertingSample(null);
       // Refresh the unmatched list
