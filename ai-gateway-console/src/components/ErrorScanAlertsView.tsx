@@ -321,12 +321,10 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     listClassifyRules().then(setClassifyRules).catch(() => {});
   };
 
-  // Auto-load classify rules when tab becomes active
+  // 组件挂载时即加载分类规则，用于表格中展示关联信息
   useEffect(() => {
-    if (activeTab === 'classify') {
-      loadClassifyRules();
-    }
-  }, [activeTab]);
+    loadClassifyRules();
+  }, [categories]);
 
   const handleAddClassifyRule = async () => {
     if (!newClassifyKeyword || !newClassifySubCategory) {
@@ -1751,6 +1749,26 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             HTTP {item.statusCode}
                           </span>
                         </div>
+                        {(() => {
+                          const matched = classifyRules.find(
+                            (r) => r.keyword.toLowerCase() === item.patternKeyword.toLowerCase()
+                          );
+                          return matched ? (
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-dashed border-[#e0e3e5]">
+                              <span className="material-symbols-outlined text-[12px] text-emerald-600">link</span>
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium truncate max-w-[200px]" title={matched.keyword}>
+                                {matched.keyword}
+                              </span>
+                              <span className="text-[9px] text-[#737686] bg-[#f2f4f6] px-1 py-0.5 rounded">P{matched.priority}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 pt-1 border-t border-dashed border-[#e0e3e5]">
+                              <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                未关联分类规则
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Granularities */}

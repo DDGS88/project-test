@@ -342,12 +342,23 @@ func (h *ErrorScanHandler) GetOverview(c *gin.Context) {
 }
 
 func (h *ErrorScanHandler) GetUnmatchedSamples(c *gin.Context) {
+	// 合并精细化规则和分类规则的关键词，确保任一来源的规则都能排除已匹配日志
+	patternSet := make(map[string]bool)
 	rules, _ := h.store.List()
-	patterns := make([]string, 0)
 	for _, r := range rules {
 		if r.PatternKeyword != "" {
-			patterns = append(patterns, r.PatternKeyword)
+			patternSet[r.PatternKeyword] = true
 		}
+	}
+	classifyRules, _ := h.classifyStore.List()
+	for _, cr := range classifyRules {
+		if cr.Keyword != "" {
+			patternSet[cr.Keyword] = true
+		}
+	}
+	patterns := make([]string, 0, len(patternSet))
+	for p := range patternSet {
+		patterns = append(patterns, p)
 	}
 
 	samples, err := h.logStore.GetUnmatchedErrorSamples(patterns, 20)
