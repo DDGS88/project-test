@@ -218,8 +218,8 @@ func (s *ErrorScanner) scanRule(rule *store.ErrorScanRule) {
 	now := time.Now()
 	windowEnd := now.Unix()
 
-	// 确定时间窗口
-	windowSec := int64(3600) // 默认 1 小时
+	// 确定时间窗口：使用轮询间隔，每次只统计新数据，避免重复告警
+	windowSec := int64(s.GetPollInterval().Seconds())
 	if rule.ScanGranularity == "天 (Daily)" {
 		windowSec = 86400
 	}

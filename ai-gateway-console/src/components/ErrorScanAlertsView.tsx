@@ -553,6 +553,17 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     };
 
     onAddScanCategory(newRuleCategory);
+
+    // 同步创建分类规则，确保 classifyLog 能匹配该关键词
+    createClassifyRule({
+      keyword: analyzedResult.keywordMatched,
+      status_code: analyzedResult.statusCode,
+      category: analyzedResult.mainCategory,
+      sub_category: analyzedResult.subCategory,
+      recommendation: analyzedResult.recommendation || '',
+      priority: 50,
+    }).catch(() => {}); // 静默失败，分类规则可能已存在
+
     onShowToast(`⚡ 成功：已根据实时日志解析结果直接创建精细化规则「${ruleName}」！`);
   };
 

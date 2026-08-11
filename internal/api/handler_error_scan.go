@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -377,11 +378,8 @@ func (h *ErrorScanHandler) CreateFromSample(c *gin.Context) {
 		return
 	}
 
-	// 从 content 中提取关键词（第一个有意义的词或短语）
-	keyword := body.Content
-	if len(keyword) > 50 {
-		keyword = keyword[:50]
-	}
+	// 从 content 中提取关键词：去掉 status_code=xxx 前缀，取第一个有意义的部分
+	keyword := extractKeyword(body.Content)
 
 	rule := store.ErrorScanRule{
 		Code:           body.Code,
@@ -402,7 +400,79 @@ func (h *ErrorScanHandler) CreateFromSample(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// 同步创建分类规则，确保 classifyLog 能匹配该关键词
+	statusCode := extractStatusCode(body.Content)
+	subCategory := body.Name
+	// 对已存在的 keyword+status_code 组合进行幂等处理
+	classifyRule := store.ErrorClassifyRule{
+		Keyword:        keyword,
+		StatusCode:     statusCode,
+		Category:       body.Category,
+		SubCategory:    subCategory,
+		Recommendation: "",
+		Priority:       50,
+	}
+	existingRules, _ := h.classifyStore.List()
+	exists := false
+	for _, cr := range existingRules {
+		if strings.EqualFold(cr.Keyword, keyword) && cr.StatusCode == statusCode {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		if err := h.classifyStore.Create(&classifyRule); err != nil {
+			h.logger.Warn("create classify rule failed (non-fatal)", zap.Error(err))
+		} else {
+			h.logger.Info("auto-created classify rule alongside error scan rule",
+				zap.String("keyword", keyword),
+				zap.Int("status_code", statusCode))
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": rule})
+}
+
+// extractKeyword 从 content 中提取关键字：去掉 status_code=xxx 前缀，取剩余部分作为关键词
+func extractKeyword(content string) string {
+	// 去掉开头的 "status_code=xxx," 或 "status_code=xxx "
+	content = strings.TrimSpace(content)
+	if after, found := strings.CutPrefix(strings.ToLower(content), "status_code="); found {
+		// 跳过数字和分隔符
+		rest := after
+		for len(rest) > 0 && (rest[0] >= '0' && rest[0] <= '9' || rest[0] == ',' || rest[0] == ' ') {
+			rest = rest[1:]
+		}
+		rest = strings.TrimSpace(rest)
+		// 去掉 "(request id:...)" 后缀
+		if idx := strings.Index(rest, "(request id:"); idx >= 0 {
+			rest = strings.TrimSpace(rest[:idx])
+		}
+		if rest != "" {
+			if len(rest) > 50 {
+				rest = rest[:50]
+			}
+			return rest
+		}
+	}
+	// fallback: 取 content 前 50 字符
+	if len(content) > 50 {
+		return content[:50]
+	}
+	return content
+}
+
+// extractStatusCode 从 content 中提取状态码，如 "status_code=400" → 400
+func extractStatusCode(content string) int {
+	re := regexp.MustCompile(`status_code[=:]\s*(\d{3})`)
+	matches := re.FindStringSubmatch(content)
+	if len(matches) >= 2 {
+		if v, err := strconv.Atoi(matches[1]); err == nil {
+			return v
+		}
+	}
+	return 0
 }
 
 func (h *ErrorScanHandler) GetFallbackConfig(c *gin.Context) {
