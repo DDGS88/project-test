@@ -45,6 +45,14 @@ func (s *ErrorScanStore) Update(rule *ErrorScanRule) error {
 	return s.db.Save(rule).Error
 }
 
+// UpdateFields 按字段部分更新（只更新 map 中存在的字段）
+func (s *ErrorScanStore) UpdateFields(id int64, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return s.db.Model(&ErrorScanRule{}).Where("id = ?", id).Updates(fields).Error
+}
+
 // Delete 删除
 func (s *ErrorScanStore) Delete(id int64) error {
 	return s.db.Delete(&ErrorScanRule{}, id).Error

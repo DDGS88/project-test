@@ -303,9 +303,15 @@ export async function createErrorScanRule(rule: Omit<ErrorScanCategory, 'id' | '
 }
 
 export async function updateErrorScanRule(id: string, rule: Partial<ErrorScanCategory>): Promise<void> {
+  const full = frontendToBackendScan(rule as any);
+  // 只发送非 undefined 的字段，避免覆盖未提供的字段为空值
+  const partial: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(full)) {
+    if (v !== undefined) partial[k] = v;
+  }
   await request(`/error-scan/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(frontendToBackendScan(rule as any)),
+    body: JSON.stringify(partial),
   });
 }
 

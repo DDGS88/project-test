@@ -321,6 +321,17 @@ export default function App() {
     }
   };
 
+  // 更新精细化规则的关联分类关键词
+  const handleUpdatePatternKeyword = async (id: string, patternKeyword: string) => {
+    try {
+      await updateErrorScanRule(id, { patternKeyword } as Partial<ErrorScanCategory>);
+      await loadErrorScanRules();
+      showToast(patternKeyword ? `已关联分类规则` : '已取消关联');
+    } catch (err: any) {
+      showToast(`关联失败: ${err.message}`);
+    }
+  };
+
   // Notification / API Key actions kept as no-ops (no backend)
   const handleGenerateKey = () => showToast('API Key management coming soon.');
   const handleRevokeKey = () => showToast('API Key management coming soon.');
@@ -356,6 +367,7 @@ export default function App() {
           onBulkUpdateFeishuWebhookUrl={handleBulkUpdateFeishuWebhookUrl}
           onShowToast={showToast}
           onSyncScanCategoryFromClassify={handleSyncScanCategoryFromClassify}
+          onUpdatePatternKeyword={handleUpdatePatternKeyword}
         />
       );
     }

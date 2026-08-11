@@ -65,6 +65,7 @@ interface ErrorScanAlertsViewProps {
   onBulkUpdateFeishuWebhookUrl?: (url: string) => void;
   onShowToast: (msg: string) => void;
   onSyncScanCategoryFromClassify?: (patternKeyword: string, updates: { subCategory?: string; category?: string; statusCode?: number }) => void;
+  onUpdatePatternKeyword?: (id: string, patternKeyword: string) => void;
 }
 
 // Preset User Example Logs from prompt for immediate testing
@@ -161,6 +162,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   onBulkUpdateFeishuWebhookUrl,
   onShowToast,
   onSyncScanCategoryFromClassify,
+  onUpdatePatternKeyword,
 }) => {
   // Global View Controls
   const [globalScanGranularity, setGlobalScanGranularity] = useState<ScanGranularity>('小时 (Hourly)');
@@ -1751,21 +1753,32 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                         </div>
                         {(() => {
                           const matched = classifyRules.find(
-                            (r) => r.keyword.toLowerCase() === item.patternKeyword.toLowerCase()
+                            (r) => r.keyword.toLowerCase() === (item.patternKeyword || '').toLowerCase()
                           );
-                          return matched ? (
+                          return (
                             <div className="flex items-center gap-1.5 pt-1 border-t border-dashed border-[#e0e3e5]">
-                              <span className="material-symbols-outlined text-[12px] text-emerald-600">link</span>
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded font-medium truncate max-w-[200px]" title={matched.keyword}>
-                                {matched.keyword}
-                              </span>
-                              <span className="text-[9px] text-[#737686] bg-[#f2f4f6] px-1 py-0.5 rounded">P{matched.priority}</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1 pt-1 border-t border-dashed border-[#e0e3e5]">
-                              <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                                未关联分类规则
-                              </span>
+                              <span className="material-symbols-outlined text-[12px] text-emerald-600 shrink-0">link</span>
+                              <select
+                                value={item.patternKeyword || ''}
+                                onChange={(e) => {
+                                  if (onUpdatePatternKeyword) {
+                                    onUpdatePatternKeyword(item.id, e.target.value);
+                                  }
+                                }}
+                                className={`flex-1 min-w-0 text-[10px] border rounded px-1.5 py-0.5 outline-none cursor-pointer truncate ${
+                                  matched
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200 font-medium'
+                                    : 'text-amber-600 bg-amber-50 border-amber-200'
+                                }`}
+                                title={item.patternKeyword || '选择关联分类规则'}
+                              >
+                                <option value="">未关联分类规则</option>
+                                {classifyRules.map((r) => (
+                                  <option key={r.id} value={r.keyword}>
+                                    {r.keyword} (P{r.priority})
+                                  </option>
+                                ))}
+                              </select>
                             </div>
                           );
                         })()}

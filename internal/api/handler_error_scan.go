@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type ErrorScanHandler struct {
@@ -64,32 +63,21 @@ func (h *ErrorScanHandler) Update(c *gin.Context) {
 		return
 	}
 
-	existing, err := h.store.Get(id)
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "rule not found"})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	var rule store.ErrorScanRule
-	if err := c.ShouldBindJSON(&rule); err != nil {
+	// 用 map 接收 JSON body，支持部分更新
+	var updates map[string]interface{}
+	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	rule.Id = id
-	rule.CreatedAt = existing.CreatedAt
-
-	if err := h.store.Update(&rule); err != nil {
+	if err := h.store.UpdateFields(id, updates); err != nil {
 		h.logger.Error("update error scan rule failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": rule})
+	updated, _ := h.store.Get(id)
+	c.JSON(http.StatusOK, gin.H{"data": updated})
 }
 
 func (h *ErrorScanHandler) Delete(c *gin.Context) {
