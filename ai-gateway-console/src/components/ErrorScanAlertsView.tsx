@@ -624,6 +624,21 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const handleSubmitConvert = async () => {
     if (!convertingSample || !convertCode || !convertName) return;
     try {
+      // 先调用 classifyLog 分析，确认已有匹配的分类规则
+      const result = await classifyLog({
+        content: convertingSample.content,
+        other: convertingSample.other || '',
+        model_name: convertingSample.model_name || '',
+        channel_name: convertingSample.channel_name || '',
+        username: convertingSample.username || '',
+        group: '',
+      });
+
+      if (!result.keyword_matched) {
+        onShowToast('未匹配到分类规则，请先在「分类规则管理」中创建对应的关键词分类规则后再转为精细化规则');
+        return;
+      }
+
       await createRuleFromSample({
         content: convertingSample.content,
         other: convertingSample.other,
@@ -634,25 +649,8 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         name: convertName,
         category: convertCategory,
       });
-      // 从 content 提取关键词，同步创建分类规则，确保后续扫描能匹配该错误
-      let keyword = (convertingSample.content || '')
-        .replace(/^status_code[=:]\s*\d+[,.]\s*/, '')
-        .replace(/\s*\(request id:.*$/, '')
-        .replace(/,( request id:.*)?$/, '')
-        .trim();
-      if (keyword) {
-        const statusCodeMatch = (convertingSample.content || '').match(/status_code[=:]\s*(\d+)/);
-        const statusCode = statusCodeMatch ? parseInt(statusCodeMatch[1]) : 0;
-        createClassifyRule({
-          keyword,
-          status_code: statusCode,
-          category: convertCategory,
-          sub_category: convertName,
-          recommendation: convertCategory,
-          priority: 50,
-        }).catch(() => {});
-      }
-      onShowToast(`已成功从样本创建规则「${convertName}」`);
+
+      onShowToast(`已成功从样本创建规则「${convertName}」，关联关键词：${result.keyword_matched}`);
       setConvertingSample(null);
       // Refresh the unmatched list
       loadOverviewStats();
@@ -1675,7 +1673,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                   />
                 </th>
                 <th className="py-3 px-4">精细化错误子类与规则代码</th>
-                <th className="py-3 px-4">扫描与告警粒度</th>
+                <th className="py-3 px-4">告警粒度</th>
                 <th className="py-3 px-4">排除 & 阈值设置</th>
                 <th className="py-3 px-4">关联飞书 Webhook 地址</th>
                 <th className="py-3 px-4 text-center">本周期错误计数</th>
@@ -1784,25 +1782,8 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                         })()}
                       </td>
 
-                      {/* Granularities */}
-                      <td className="py-3.5 px-4 text-[12px] space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[#737686]">扫描粒度:</span>
-                          <select
-                            value={item.scanGranularity}
-                            onChange={(e) =>
-                              onUpdateGranularity(
-                                item.id,
-                                e.target.value as ScanGranularity,
-                                item.alertGranularity
-                              )
-                            }
-                            className="bg-white border border-[#c3c6d7] rounded px-1.5 py-0.5 font-medium text-[11px] outline-none"
-                          >
-                            <option value="小时 (Hourly)">小时 (Hourly)</option>
-                            <option value="天 (Daily)">天 (Daily)</option>
-                          </select>
-                        </div>
+                      {/* Alert Granularity */}
+                      <td className="py-3.5 px-4 text-[12px]">
                         <div className="flex items-center gap-1.5">
                           <span className="text-[#737686]">告警粒度:</span>
                           <select
