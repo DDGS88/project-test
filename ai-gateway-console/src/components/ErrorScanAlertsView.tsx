@@ -241,6 +241,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [newClassifyRecommendation, setNewClassifyRecommendation] = useState('');
   const [newClassifyPriority, setNewClassifyPriority] = useState(50);
   const [editingClassifyRule, setEditingClassifyRule] = useState<ClassifyRule | null>(null);
+  const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     getErrorScanPollInterval().then(setPollIntervalSeconds).catch(() => {});
@@ -1702,6 +1703,20 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
           <table className="w-full text-left text-[13px] border-collapse">
             <thead>
               <tr className="bg-[#f7f9fb] border-b border-[#c3c6d7] text-[#434655] font-semibold text-[12px]">
+                <th className="py-3 px-3 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedRuleIds.size > 0 && selectedRuleIds.size === filteredCategories.length}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedRuleIds(new Set(filteredCategories.map(c => c.id)));
+                      } else {
+                        setSelectedRuleIds(new Set());
+                      }
+                    }}
+                    className="w-3.5 h-3.5 accent-[#004ac6] cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-4">精细化错误子类与规则代码</th>
                 <th className="py-3 px-4">受影响模型 / 渠道 / 组</th>
                 <th className="py-3 px-4">扫描与告警粒度</th>
@@ -1715,7 +1730,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
             <tbody className="divide-y divide-[#e0e3e5]">
               {filteredCategories.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-[#737686]">
+                  <td colSpan={9} className="py-8 text-center text-[#737686]">
                     未找到匹配条件下的错误日志分类记录
                   </td>
                 </tr>
@@ -1733,8 +1748,24 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                       key={item.id}
                       className={`hover:bg-[#f2f4f6] transition-colors ${
                         item.suppressed ? 'opacity-60 bg-[#fafafa]' : ''
-                      }`}
+                      } ${selectedRuleIds.has(item.id) ? 'bg-[#d0e1fb]/30' : ''}`}
                     >
+                      <td className="py-3.5 px-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedRuleIds.has(item.id)}
+                          onChange={() => {
+                            const next = new Set(selectedRuleIds);
+                            if (next.has(item.id)) {
+                              next.delete(item.id);
+                            } else {
+                              next.add(item.id);
+                            }
+                            setSelectedRuleIds(next);
+                          }}
+                          className="w-3.5 h-3.5 accent-[#004ac6] cursor-pointer"
+                        />
+                      </td>
                       {/* SubCategory Code & Name */}
                       <td className="py-3.5 px-4 space-y-1 max-w-[320px]">
                         <div className="flex items-center gap-2">
@@ -1939,6 +1970,31 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => {
+                              setActiveTab('classify');
+                              listClassifyRules().then((rules) => {
+                                setClassifyRules(rules);
+                                const matched = rules.find(
+                                  (r) => r.keyword.toLowerCase() === item.patternKeyword.toLowerCase()
+                                );
+                                if (matched) {
+                                  setEditingClassifyRule(matched);
+                                  onShowToast(`已定位到分类规则「${matched.keyword}」，可在此编辑`);
+                                } else {
+                                  setNewClassifyKeyword(item.patternKeyword);
+                                  onShowToast(`未找到匹配的分类规则，关键词已预填入添加表单`);
+                                }
+                              }).catch(() => {
+                                setNewClassifyKeyword(item.patternKeyword);
+                              });
+                            }}
+                            title="跳转到分类规则管理"
+                            className="flex items-center gap-1 px-2 py-1.5 bg-[#e8f5e9] hover:bg-[#c8e6c9] text-[#2e7d32] font-medium rounded text-[11px] transition-colors whitespace-nowrap"
+                          >
+                            <span className="material-symbols-outlined text-[14px]">category</span>
+                            <span>分类</span>
+                          </button>
+                          <button
                             onClick={() => setInspectingCategory(item)}
                             title="查看真实日志 JSON"
                             className="flex items-center gap-1 px-2 py-1.5 bg-[#d0e1fb] hover:bg-[#b4c5ff] text-[#003ea8] font-medium rounded text-[11px] transition-colors whitespace-nowrap"
@@ -1985,6 +2041,35 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* 批量操作栏 */}
+        {selectedRuleIds.size > 0 && (
+          <div className="flex items-center justify-between bg-[#004ac6]/5 border border-[#b4c5ff] rounded-lg px-4 py-2.5 mt-3">
+            <span className="text-[13px] font-medium text-[#004ac6]">
+              已选择 <span className="font-bold">{selectedRuleIds.size}</span> 条规则
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedRuleIds(new Set())}
+                className="px-3 py-1.5 text-[12px] text-[#737686] hover:text-[#191c1e] font-medium rounded-lg transition-colors"
+              >
+                取消选择
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm(`确定要删除选中的 ${selectedRuleIds.size} 条规则吗？此操作不可逆。`)) {
+                    selectedRuleIds.forEach((id) => onDeleteScanCategory(id));
+                    setSelectedRuleIds(new Set());
+                  }
+                }}
+                className="px-3 py-1.5 bg-[#ba1a1a] text-white text-[12px] font-medium rounded-lg hover:opacity-90 flex items-center gap-1 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[14px]">delete</span>
+                批量删除
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       </>)}
@@ -2865,6 +2950,47 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         </div>
 
         {/* Rules list */}
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] font-semibold text-[#434655]">已配置 {classifyRules.length} 条</span>
+          {(() => {
+            const seen = new Map<string, number[]>();
+            classifyRules.forEach((r) => {
+              const key = r.keyword.toLowerCase();
+              if (!seen.has(key)) seen.set(key, []);
+              seen.get(key)!.push(r.id);
+            });
+            const dupCount = Array.from(seen.values()).filter(ids => ids.length > 1).length;
+            return dupCount > 0 ? (
+              <button
+                onClick={async () => {
+                  const seen2 = new Map<string, ClassifyRule[]>();
+                  classifyRules.forEach((r) => {
+                    const key = r.keyword.toLowerCase();
+                    if (!seen2.has(key)) seen2.set(key, []);
+                    seen2.get(key)!.push(r);
+                  });
+                  let mergedCount = 0;
+                  for (const [key, rules] of seen2.entries()) {
+                    if (rules.length <= 1) continue;
+                    // 保留优先级最高的，删除其余
+                    const sorted = [...rules].sort((a, b) => b.priority - a.priority);
+                    for (let i = 1; i < sorted.length; i++) {
+                      try {
+                        await deleteClassifyRule(sorted[i].id);
+                        mergedCount++;
+                      } catch {}
+                    }
+                  }
+                  onShowToast(`已清理 ${mergedCount} 条重复关键词`);
+                  loadClassifyRules();
+                }}
+                className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors"
+              >
+                合并去重 ({dupCount} 组重复)
+              </button>
+            ) : null;
+          })()}
+        </div>
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {classifyRules.length === 0 ? (
             <p className="text-[12px] text-[#80848f] text-center py-4">暂无分类规则，启动时会自动写入默认规则</p>

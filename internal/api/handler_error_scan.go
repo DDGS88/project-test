@@ -401,33 +401,39 @@ func (h *ErrorScanHandler) CreateFromSample(c *gin.Context) {
 		return
 	}
 
-	// 同步创建分类规则，确保 classifyLog 能匹配该关键词
+	// 同步创建/合并分类规则，确保 classifyLog 能匹配该关键词
 	statusCode := extractStatusCode(body.Content)
-	subCategory := body.Name
-	// 对已存在的 keyword+status_code 组合进行幂等处理
 	classifyRule := store.ErrorClassifyRule{
 		Keyword:        keyword,
 		StatusCode:     statusCode,
 		Category:       body.Category,
-		SubCategory:    subCategory,
+		SubCategory:    body.Name,
 		Recommendation: "",
 		Priority:       50,
 	}
+	// 关键词唯一：已存在则更新合并
 	existingRules, _ := h.classifyStore.List()
-	exists := false
+	merged := false
 	for _, cr := range existingRules {
-		if strings.EqualFold(cr.Keyword, keyword) && cr.StatusCode == statusCode {
-			exists = true
+		if strings.EqualFold(cr.Keyword, keyword) {
+			if cr.StatusCode != statusCode && statusCode != 0 {
+				classifyRule.StatusCode = 0
+			}
+			classifyRule.Id = cr.Id
+			if err := h.classifyStore.Update(&classifyRule); err != nil {
+				h.logger.Warn("merge classify rule failed (non-fatal)", zap.Error(err))
+			} else {
+				merged = true
+			}
 			break
 		}
 	}
-	if !exists {
+	if !merged {
 		if err := h.classifyStore.Create(&classifyRule); err != nil {
 			h.logger.Warn("create classify rule failed (non-fatal)", zap.Error(err))
 		} else {
 			h.logger.Info("auto-created classify rule alongside error scan rule",
-				zap.String("keyword", keyword),
-				zap.Int("status_code", statusCode))
+				zap.String("keyword", keyword))
 		}
 	}
 
@@ -671,6 +677,27 @@ func (h *ErrorScanHandler) CreateClassifyRule(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "keyword and category are required"})
 		return
 	}
+
+	// 关键词唯一：如果已存在同关键词的规则，则更新合并
+	existingRules, _ := h.classifyStore.List()
+	for _, cr := range existingRules {
+		if strings.EqualFold(cr.Keyword, rule.Keyword) {
+			// 合并：用新数据覆盖，如果状态码不同则设为0（匹配所有）
+			if cr.StatusCode != rule.StatusCode && rule.StatusCode != 0 {
+				rule.StatusCode = 0
+			}
+			rule.Id = cr.Id
+			if err := h.classifyStore.Update(&rule); err != nil {
+				h.logger.Error("update (merge) classify rule failed", zap.Error(err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			h.logger.Info("merged classify rule (keyword exists)", zap.String("keyword", rule.Keyword))
+			c.JSON(http.StatusOK, gin.H{"data": rule, "merged": true})
+			return
+		}
+	}
+
 	if err := h.classifyStore.Create(&rule); err != nil {
 		h.logger.Error("create classify rule failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
