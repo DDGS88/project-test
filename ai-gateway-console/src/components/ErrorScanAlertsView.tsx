@@ -228,6 +228,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [convertCode, setConvertCode] = useState('');
   const [convertName, setConvertName] = useState('');
   const [convertCategory, setConvertCategory] = useState('400 参数格式错误');
+  const [convertAnalyzing, setConvertAnalyzing] = useState(false);
+  const [convertClassifyResult, setConvertClassifyResult] = useState<ClassifyResult | null>(null);
+  const [convertNewKeyword, setConvertNewKeyword] = useState('');
 
   // Fallback alert config state
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
@@ -617,26 +620,61 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     setConvertCode(`ERR_UNMATCHED_${sample.id}`);
     setConvertName(`${statusPrefix}[未匹配] ${summary || '未知错误'}`);
     setConvertCategory('400 参数格式错误');
+    setConvertClassifyResult(null);
+    setConvertNewKeyword('');
     setConvertingSample(sample);
+
+    // 自动调用 classifyLog 分析
+    setConvertAnalyzing(true);
+    classifyLog({
+      content: sample.content,
+      other: sample.other || '',
+      model_name: sample.model_name || '',
+      channel_name: sample.channel_name || '',
+      username: sample.username || '',
+      group: '',
+    })
+      .then((result) => {
+        setConvertClassifyResult(result);
+        // 如果未匹配到分类规则，预填关键词供用户创建
+        if (!result.keyword_matched) {
+          const kw = (sample.content || '')
+            .replace(/^status_code[=:]\s*\d+[,.]\s*/, '')
+            .replace(/\s*\(request id:.*$/, '')
+            .replace(/,( request id:.*)?$/, '')
+            .trim();
+          setConvertNewKeyword(kw);
+        }
+      })
+      .catch(() => {
+        setConvertClassifyResult(null);
+      })
+      .finally(() => setConvertAnalyzing(false));
   };
 
   // Submit conversion from sample to rule
   const handleSubmitConvert = async () => {
     if (!convertingSample || !convertCode || !convertName) return;
     try {
-      // 先调用 classifyLog 分析，确认已有匹配的分类规则
-      const result = await classifyLog({
-        content: convertingSample.content,
-        other: convertingSample.other || '',
-        model_name: convertingSample.model_name || '',
-        channel_name: convertingSample.channel_name || '',
-        username: convertingSample.username || '',
-        group: '',
-      });
-
-      if (!result.keyword_matched) {
-        onShowToast('未匹配到分类规则，请先在「分类规则管理」中创建对应的关键词分类规则后再转为精细化规则');
-        return;
+      // 如果尚未分析或分析结果无匹配，需要先创建分类规则
+      if (!convertClassifyResult || !convertClassifyResult.keyword_matched) {
+        if (!convertNewKeyword.trim()) {
+          onShowToast('请先填写关键词以创建分类规则');
+          return;
+        }
+        // 创建分类规则
+        const statusCodeMatch = (convertingSample.content || '').match(/status_code[=:]\s*(\d+)/);
+        const statusCode = statusCodeMatch ? parseInt(statusCodeMatch[1]) : 0;
+        await createClassifyRule({
+          keyword: convertNewKeyword.trim(),
+          status_code: statusCode,
+          category: convertCategory,
+          sub_category: convertName,
+          recommendation: convertCategory,
+          priority: 50,
+        });
+        // 重新加载分类规则列表
+        loadClassifyRules();
       }
 
       await createRuleFromSample({
@@ -650,8 +688,10 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
         category: convertCategory,
       });
 
-      onShowToast(`已成功从样本创建规则「${convertName}」，关联关键词：${result.keyword_matched}`);
+      const matchedKw = convertClassifyResult?.keyword_matched || convertNewKeyword.trim();
+      onShowToast(`已成功创建规则「${convertName}」，关联关键词：${matchedKw}`);
       setConvertingSample(null);
+      setConvertClassifyResult(null);
       // Refresh the unmatched list
       loadOverviewStats();
       getUnmatchedSamples()
@@ -2728,6 +2768,50 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                           转换为规则
                         </h4>
 
+                        {/* 分类分析结果 */}
+                        {convertAnalyzing ? (
+                          <div className="bg-white border border-[#e0e3e5] rounded-lg p-3 flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[16px] text-[#004ac6] animate-spin">progress_activity</span>
+                            <span className="text-[11px] text-[#737686]">正在分析日志分类...</span>
+                          </div>
+                        ) : convertClassifyResult ? (
+                          <div className={`rounded-lg p-3 space-y-1.5 border ${convertClassifyResult.keyword_matched ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                            <div className="flex items-center gap-2 text-[11px]">
+                              <span className="font-semibold text-[#434655]">分类结果:</span>
+                              <span className={`px-1.5 py-0.5 rounded font-medium ${convertClassifyResult.keyword_matched ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {convertClassifyResult.keyword_matched ? '已匹配' : '未匹配到分类规则'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] text-[#434655]">
+                              <div>主分类: <span className="font-medium">{convertClassifyResult.category}</span></div>
+                              <div>子分类: <span className="font-medium">{convertClassifyResult.sub_category}</span></div>
+                              <div>状态码: <span className="font-medium font-mono">{convertClassifyResult.status_code || '未识别'}</span></div>
+                              <div>模型: <span className="font-medium">{convertClassifyResult.model || '-'}</span></div>
+                              {convertClassifyResult.keyword_matched && (
+                                <div className="col-span-2">匹配关键词: <span className="font-mono text-emerald-700 bg-emerald-100 px-1 rounded">{convertClassifyResult.keyword_matched}</span></div>
+                              )}
+                              <div className="col-span-2 text-[#737686]">建议: {convertClassifyResult.recommendation}</div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {/* 未匹配时显示创建分类规则的输入框 */}
+                        {convertClassifyResult && !convertClassifyResult.keyword_matched && (
+                          <div className="bg-white border border-amber-300 rounded-lg p-3 space-y-1.5">
+                            <label className="text-[11px] font-semibold text-amber-700 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[13px]">warning</span>
+                              需创建分类规则（关键词将用于匹配此类错误）
+                            </label>
+                            <input
+                              type="text"
+                              value={convertNewKeyword}
+                              onChange={(e) => setConvertNewKeyword(e.target.value)}
+                              placeholder="输入关键词..."
+                              className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 font-mono text-[11px] outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                          </div>
+                        )}
+
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1">
                             <label className="text-[11px] font-semibold text-[#434655]">规则代码 (Code)</label>
@@ -2776,9 +2860,12 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                           <button
                             type="button"
                             onClick={handleSubmitConvert}
-                            className="px-4 py-1.5 bg-[#004ac6] text-white text-[12px] font-medium rounded-lg hover:opacity-90"
+                            disabled={convertAnalyzing}
+                            className="px-4 py-1.5 bg-[#004ac6] text-white text-[12px] font-medium rounded-lg hover:opacity-90 disabled:opacity-50"
                           >
-                            确认创建规则
+                            {convertClassifyResult && !convertClassifyResult.keyword_matched
+                              ? '创建分类规则并转为精细化规则'
+                              : '确认创建规则'}
                           </button>
                         </div>
                       </div>
