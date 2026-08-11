@@ -456,15 +456,15 @@ func extractKeyword(content string) string {
 			rest = strings.TrimSpace(rest[:idx])
 		}
 		if rest != "" {
-			if len(rest) > 50 {
-				rest = rest[:50]
+			if len(rest) > 120 {
+				rest = rest[:120]
 			}
 			return rest
 		}
 	}
-	// fallback: 取 content 前 50 字符
-	if len(content) > 50 {
-		return content[:50]
+	// fallback: 取 content 前 120 字符
+	if len(content) > 120 {
+		return content[:120]
 	}
 	return content
 }

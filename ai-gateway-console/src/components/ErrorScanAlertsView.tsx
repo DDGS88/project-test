@@ -1538,9 +1538,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                               className="flex items-center gap-2 px-2 py-1.5 bg-[#f7f9fb] rounded border border-[#e0e3e5] hover:border-[#004ac6] transition-colors cursor-pointer group"
                               onClick={() => setDetailModalItem(detail)}
                             >
-                              <span className="text-[11px] font-mono text-[#737686] min-w-[40px]">#{idx + 1}</span>
-                              <span className="flex-1 text-[12px] text-[#191c1e] truncate" title={detail.content}>
-                                {detail.content.length > 60 ? detail.content.slice(0, 60) + '...' : detail.content}
+                              <span className="text-[11px] font-mono text-[#737686] min-w-[40px] self-start mt-0.5">#{idx + 1}</span>
+                              <span className="flex-1 text-[12px] text-[#191c1e] break-all leading-relaxed" title={detail.content}>
+                                {detail.content}
                               </span>
                               <span className="text-[11px] text-[#737686] whitespace-nowrap">
                                 {detail.model_name || '-'}
