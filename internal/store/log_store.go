@@ -104,7 +104,7 @@ func (s *LogStore) CountRegex(startTime, endTime int64, channelId int, field, pa
 	if negate {
 		op = s.negateOp()
 	}
-	query = query.Where(field+" "+op+" ?", escapeRegex(pattern))
+	query = query.Where(field+" "+op+" ?", pattern)
 
 	var count int64
 	if err := query.Count(&count).Error; err != nil {
@@ -144,7 +144,7 @@ func (s *LogStore) GetRegexSamples(startTime, endTime int64, channelId int, fiel
 		op = s.negateOp()
 	}
 
-	query = query.Where(field+" "+op+" ?", escapeRegex(pattern)).
+	query = query.Where(field+" "+op+" ?", pattern).
 		Order("created_at DESC").
 		Limit(5)
 

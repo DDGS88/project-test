@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,14 @@ import (
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 )
+
+// keywordRegexSpecialChars 匹配正则特殊字符
+var keywordRegexSpecialChars = regexp.MustCompile(`([\\.*+?^${}()|[\]{}])`)
+
+// escapeKeyword 转义正则特殊字符，使关键词作为字面量匹配
+func escapeKeyword(s string) string {
+	return keywordRegexSpecialChars.ReplaceAllString(s, `\$1`)
+}
 
 // ErrorScanner 错误日志扫描调度器
 type ErrorScanner struct {
@@ -278,7 +287,7 @@ func (s *ErrorScanner) scanRule(rule *store.ErrorScanRule) {
 	// 按错误精细类型：直接统计总数，不分组
 	if rule.AlertGranularity == "按错误精细类型" {
 		totalCount, err := s.logStore.CountRegex(windowStart, windowEnd,
-			0, "content", rule.PatternKeyword, "", false, false, 5)
+			0, "content", escapeKeyword(rule.PatternKeyword), "", false, false, 5)
 		if err != nil {
 			s.logger.Error("count error logs failed",
 				zap.Int64("rule_id", rule.Id), zap.Error(err))
