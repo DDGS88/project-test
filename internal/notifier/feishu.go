@@ -96,14 +96,12 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 	}
 
 	if len(msg.AtUsers) > 0 {
-		atContent := ""
+		atContent := "\n\n"
 		for _, u := range msg.AtUsers {
 			atContent += fmt.Sprintf(`<at user_id="%s"></at>`, u)
 		}
-		card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
-			Tag:     "markdown",
-			Content: atContent,
-		})
+		content += atContent
+		card.Card.Elements[0].Content = content
 	}
 
 	body, err := json.Marshal(card)
@@ -136,6 +134,28 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 		zap.String("rule_name", msg.RuleName),
 		zap.Int("match_count", msg.MatchCount),
 		zap.String("response", string(respBody)))
+
+	// 自定义群机器人在互动卡片中不支持 @ 通知，需要追加一条 text 消息来触发 @
+	if len(msg.AtUsers) > 0 {
+		atText := ""
+		for _, u := range msg.AtUsers {
+			atText += fmt.Sprintf(`<at user_id="%s"></at>`, u)
+		}
+		textBody, _ := json.Marshal(map[string]interface{}{
+			"msg_type": "text",
+			"content": map[string]string{
+				"text": atText,
+			},
+		})
+		textResp, err := n.client.Post(webhookURL, "application/json", bytes.NewReader(textBody))
+		if err != nil {
+			n.logger.Error("feishu at text message failed", zap.Error(err))
+		} else {
+			defer textResp.Body.Close()
+			textRespBody, _ := io.ReadAll(io.LimitReader(textResp.Body, 1024))
+			n.logger.Info("feishu at text message sent", zap.String("response", string(textRespBody)))
+		}
+	}
 
 	return nil
 }
