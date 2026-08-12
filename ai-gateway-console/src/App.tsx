@@ -134,10 +134,10 @@ export default function App() {
       } else {
         await enableRule(ruleId);
       }
-      showToast(`Rule "${rule.name}" ${rule.enabled ? 'disabled' : 'enabled'}.`);
+      showToast(`规则「${rule.name}」已${rule.enabled ? '禁用' : '启用'}`);
       await loadRules();
     } catch (err: any) {
-      showToast(`Failed: ${err.message}`);
+      showToast(`操作失败: ${err.message}`);
     }
   };
 
@@ -147,25 +147,26 @@ export default function App() {
     try {
       if (ruleData.id) {
         await updateRule(ruleData.id, ruleData);
-        showToast(`Rule "${ruleData.name}" updated.`);
+        showToast(`规则「${ruleData.name}」已更新`);
       } else {
         await createRule(ruleData);
-        showToast(`Rule "${ruleData.name}" created.`);
+        showToast(`规则「${ruleData.name}」已创建`);
       }
       setEditingRule(null);
       await loadRules();
     } catch (err: any) {
-      showToast(`Failed: ${err.message}`);
+      showToast(`操作失败: ${err.message}`);
     }
   };
 
   const handleDeleteRule = async (ruleId: string) => {
     try {
+      const rule = rules.find((r) => r.id === ruleId);
       await deleteRule(ruleId);
-      showToast('Rule deleted.');
+      showToast(`规则「${rule?.name || ruleId}」已删除`);
       await loadRules();
     } catch (err: any) {
-      showToast(`Failed: ${err.message}`);
+      showToast(`删除失败: ${err.message}`);
     }
   };
 
@@ -202,7 +203,7 @@ export default function App() {
       latencyMs: Math.floor(Math.random() * 150) + 50,
     };
     setLogs((prev) => [newLog, ...prev]);
-    showToast(`Triggered "${rule.name}" & sent alert payload to webhook!`);
+    showToast(`已触发规则「${rule.name}」，已发送告警到 Webhook`);
   };
 
   // ── Error Scan Category Handlers ──
@@ -342,8 +343,8 @@ export default function App() {
   };
 
   // Notification / API Key actions kept as no-ops (no backend)
-  const handleGenerateKey = () => showToast('API Key management coming soon.');
-  const handleRevokeKey = () => showToast('API Key management coming soon.');
+  const handleGenerateKey = () => showToast('API Key 管理功能即将上线');
+  const handleRevokeKey = () => showToast('API Key 管理功能即将上线');
 
   const renderMainContent = () => {
     if (activeMainTab === 'dashboard') {
@@ -593,7 +594,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 scroll-smooth">
           <div className="max-w-[1440px] mx-auto">
             {rulesLoading && activeMainTab === 'alert-rules' ? (
-              <div className="text-center py-20 text-[#434655] text-[14px]">Loading rules...</div>
+              <div className="text-center py-20 text-[#434655] text-[14px]">加载规则中...</div>
             ) : (
               renderMainContent()
             )}
