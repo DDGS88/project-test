@@ -1872,7 +1872,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                       </td>
 
                       {/* Exclude & Threshold */}
-                      <td className="py-3.5 px-4 text-[12px] space-y-1 max-w-[180px]">
+                      <td className="py-3.5 px-4 text-[12px] space-y-1 min-w-[140px]">
                         <div className="text-[11px] text-[#737686]">
                           阈值: <span className="font-semibold text-[#191c1e]">{item.alertThreshold || 10} 次</span>
                         </div>
