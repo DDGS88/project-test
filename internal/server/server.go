@@ -100,9 +100,6 @@ func Run(cfg *config.Config) error {
 	ruleStore := store.NewRuleStore(logDB)
 	errorScanStore := store.NewErrorScanStore(logDB)
 	classifyStore := store.NewErrorClassifyStore(logDB)
-	if err := classifyStore.SeedDefaults(); err != nil {
-		logger.Warn("seed classify defaults failed", zap.Error(err))
-	}
 	logStore := store.NewLogStore(logDB)
 	channelStore := store.NewChannelStore(businessDB)
 	feishuNotifier := notifier.NewFeishuNotifier(logger)

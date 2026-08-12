@@ -368,6 +368,7 @@ export default function App() {
           onShowToast={showToast}
           onSyncScanCategoryFromClassify={handleSyncScanCategoryFromClassify}
           onUpdatePatternKeyword={handleUpdatePatternKeyword}
+          onRefreshData={loadErrorScanRules}
         />
       );
     }

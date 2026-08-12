@@ -66,6 +66,7 @@ interface ErrorScanAlertsViewProps {
   onShowToast: (msg: string) => void;
   onSyncScanCategoryFromClassify?: (patternKeyword: string, updates: { subCategory?: string; category?: string; statusCode?: number }) => void;
   onUpdatePatternKeyword?: (id: string, patternKeyword: string) => void;
+  onRefreshData?: () => void;
 }
 
 // Preset User Example Logs from prompt for immediate testing
@@ -163,6 +164,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   onShowToast,
   onSyncScanCategoryFromClassify,
   onUpdatePatternKeyword,
+  onRefreshData,
 }) => {
   // Global View Controls
   const [globalScanGranularity, setGlobalScanGranularity] = useState<ScanGranularity>('小时 (Hourly)');
@@ -603,16 +605,12 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Open conversion form for a sample
   const handleOpenConvertForm = (sample: UnmatchedSample) => {
-    // 从 content 中提取简短摘要
+    // 从 content 中提取摘要（不截断，用户可自行编辑）
     let summary = (sample.content || '')
-      .replace(/^status_code[=:]\s*/, '')        // 去掉开头的 status_code=
-      .replace(/\s*\(request id:.*$/, '')         // 去掉 request id 后缀
-      .replace(/,( request id:.*)?$/, '')         // 去掉逗号后的 request id
+      .replace(/^status_code[=:]\s*\d+[,.]\s*/, '')  // 去掉开头的 status_code=400,
+      .replace(/\s*\(request id:.*$/, '')             // 去掉 request id 后缀
+      .replace(/,( request id:.*)?$/, '')             // 去掉逗号后的 request id
       .trim();
-    // 截断过长摘要
-    if (summary.length > 30) {
-      summary = summary.slice(0, 30) + '...';
-    }
     // 提取 HTTP 状态码
     const statusMatch = (sample.content || '').match(/status_code[=:]\s*(\d{3})/);
     const statusPrefix = statusMatch ? `${statusMatch[1]} ` : '';
@@ -692,11 +690,13 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       onShowToast(`已成功创建规则「${convertName}」，关联关键词：${matchedKw}`);
       setConvertingSample(null);
       setConvertClassifyResult(null);
-      // Refresh the unmatched list
+      // 刷新未匹配样本列表
       loadOverviewStats();
       getUnmatchedSamples()
         .then(setUnmatchedSamples)
         .catch(() => {});
+      // 刷新精细化规则列表，使新规则立即可见
+      if (onRefreshData) onRefreshData();
     } catch (err: any) {
       onShowToast(`创建规则失败: ${err.message}`);
     }
@@ -2823,12 +2823,12 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-[#434655]">规则名称</label>
-                            <input
-                              type="text"
+                            <label className="text-[11px] font-semibold text-[#434655]">规则名称（可编辑）</label>
+                            <textarea
                               value={convertName}
                               onChange={(e) => setConvertName(e.target.value)}
-                              className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+                              rows={2}
+                              className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6] resize-none"
                             />
                           </div>
                         </div>
