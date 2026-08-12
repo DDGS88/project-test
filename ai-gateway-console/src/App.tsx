@@ -280,6 +280,16 @@ export default function App() {
     }
   };
 
+  const handleUpdateScanCategory = async (id: string, updates: Partial<ErrorScanCategory>) => {
+    try {
+      await updateErrorScanRule(id, updates);
+      await loadErrorScanRules();
+      showToast('规则已更新');
+    } catch (err: any) {
+      showToast(`更新失败: ${err.message}`);
+    }
+  };
+
   const handleUpdateThresholdExcludes = async (
     id: string,
     alertThreshold: number,
@@ -299,7 +309,7 @@ export default function App() {
   // 分类规则更新时同步精细化规则
   const handleSyncScanCategoryFromClassify = async (
     patternKeyword: string,
-    updates: { subCategory?: string; category?: string; statusCode?: number }
+    updates: { subCategory?: string; category?: string }
   ) => {
     const matched = errorScanCategories.filter(
       (c) => c.patternKeyword.toLowerCase() === patternKeyword.toLowerCase()
@@ -311,7 +321,6 @@ export default function App() {
           updateErrorScanRule(c.id, {
             subCategory: updates.subCategory || c.subCategory,
             category: updates.category as ErrorScanCategory['category'] || c.category,
-            statusCode: updates.statusCode || c.statusCode,
           } as Partial<ErrorScanCategory>)
         )
       );
@@ -363,6 +372,7 @@ export default function App() {
           onUpdateThresholdExcludes={handleUpdateThresholdExcludes}
           onAddScanCategory={handleAddScanCategory}
           onDeleteScanCategory={handleDeleteScanCategory}
+          onUpdateScanCategory={handleUpdateScanCategory}
           onUpdateFeishuWebhookUrl={handleUpdateFeishuWebhookUrl}
           onBulkUpdateFeishuWebhookUrl={handleBulkUpdateFeishuWebhookUrl}
           onShowToast={showToast}

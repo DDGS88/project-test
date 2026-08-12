@@ -95,6 +95,13 @@ func Run(cfg *config.Config) error {
 	if err := logDB.AutoMigrate(&store.ErrorClassifyRule{}); err != nil {
 		return fmt.Errorf("auto migrate error_classify_rules: %w", err)
 	}
+	// 数据迁移：将历史分类规则的 status_code 统一设为 0（匹配全部状态码）
+	if result := logDB.Model(&store.ErrorClassifyRule{}).Where("status_code != ?", 0).
+		Update("status_code", 0); result.Error != nil {
+		logger.Warn("migrate classify rules status_code to 0 failed", zap.Error(result.Error))
+	} else if result.RowsAffected > 0 {
+		logger.Info("migrated classify rules status_code to 0", zap.Int64("affected_rows", result.RowsAffected))
+	}
 	if err := logDB.AutoMigrate(&store.ScanSetting{}); err != nil {
 		logger.Warn("failed to migrate scan_settings table", zap.Error(err))
 	}
