@@ -37,15 +37,6 @@ import type {
   ClassifyResult,
   ClassifyRule,
 } from '../api/rules';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
 
 interface ErrorScanAlertsViewProps {
   categories: ErrorScanCategory[];
@@ -611,7 +602,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Load unmatched samples and open panel
   const handleOpenUnmatchedPanel = () => {
     setUnmatchedLoading(true);
-    getUnmatchedSamples()
+    getUnmatchedSamples(overviewWindow)
       .then((data) => {
         setUnmatchedSamples(data);
         setShowUnmatchedPanel(true);
@@ -709,7 +700,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       setConvertClassifyResult(null);
       // 刷新未匹配样本列表
       loadOverviewStats();
-      getUnmatchedSamples()
+      getUnmatchedSamples(overviewWindow)
         .then(setUnmatchedSamples)
         .catch(() => {});
       // 刷新精细化规则列表，使新规则立即可见
@@ -722,7 +713,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Refresh unmatched samples
   const handleRefreshUnmatched = () => {
     setUnmatchedLoading(true);
-    getUnmatchedSamples()
+    getUnmatchedSamples(overviewWindow)
       .then(setUnmatchedSamples)
       .catch(() => onShowToast('刷新未匹配样本失败'))
       .finally(() => setUnmatchedLoading(false));
@@ -1401,19 +1392,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
         <div className="bg-white border border-[#c3c6d7] p-5 rounded-xl shadow-2xs">
           <div className="flex justify-between items-center text-[#434655]">
-            <span className="text-[12px] font-semibold">
-              扫描周期错误总量 ({globalScanGranularity === '小时 (Hourly)' ? '近1小时' : '今日'})
-            </span>
-            <span className="material-symbols-outlined text-[20px] text-[#ba1a1a]">running_with_errors</span>
-          </div>
-          <p className="text-[28px] font-extrabold text-[#191c1e] mt-2">
-            {globalScanGranularity === '小时 (Hourly)' ? totalHourlyCount : totalDailyCount}
-            <span className="text-[13px] text-[#737686] font-normal ml-1">条错误日志</span>
-          </p>
-        </div>
-
-        <div className="bg-white border border-[#c3c6d7] p-5 rounded-xl shadow-2xs">
-          <div className="flex justify-between items-center text-[#434655]">
             <span className="text-[12px] font-semibold">已标记开启告警</span>
             <span className="material-symbols-outlined text-[20px] text-emerald-600">notifications_active</span>
           </div>
@@ -1432,45 +1410,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
             {suppressedCount} <span className="text-[13px] text-[#737686] font-normal">项分类已屏蔽</span>
           </p>
           <p className="text-[11px] text-[#737686] mt-1">例如：消息 Text 块为空 (已知前端问题)</p>
-        </div>
-      </div>
-
-      {/* Visual Error Frequency Chart */}
-      <div className="bg-white border border-[#c3c6d7] rounded-xl p-5 shadow-2xs space-y-3">
-        <div className="flex justify-between items-center">
-          <div>
-            <h3 className="text-[16px] font-bold text-[#191c1e]">
-              精细化错误分类分布与爆发频次 ({globalScanGranularity})
-            </h3>
-            <p className="text-[12px] text-[#434655]">
-              直观呈现 Tool Use 异常、Overloaded 崩溃、空 Text 块等分类在 ({globalScanGranularity}) 周期内的分布
-            </p>
-          </div>
-          <span className="text-[12px] font-mono text-[#004ac6] bg-[#d0e1fb] px-3 py-1 rounded-lg">
-            聚合维度: {globalAlertGranularity}
-          </span>
-        </div>
-
-        <div className="h-48 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <XAxis dataKey="name" stroke="#737686" fontSize={11} />
-              <YAxis stroke="#737686" fontSize={11} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#ffffff',
-                  borderColor: '#c3c6d7',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                }}
-              />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       </div>
 

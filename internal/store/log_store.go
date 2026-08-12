@@ -380,10 +380,10 @@ type ErrorSampleWithId struct {
 	Cnt         int64  `json:"cnt"`
 }
 
-// GetUnmatchedErrorSamples 获取最近 24 小时未匹配规则的错误样本
-func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int) ([]ErrorSampleWithId, error) {
+// GetUnmatchedErrorSamples 获取指定时间窗口内未匹配规则的错误样本
+func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int, windowHours int) ([]ErrorSampleWithId, error) {
 	var results []ErrorSampleWithId
-	since := time.Now().Add(-24 * time.Hour).Unix()
+	since := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
 
 	query := s.db.Model(&model.Log{}).
 		Select("MIN(id) AS id, LEFT(content, 120) AS content, other, model_name, channel_name, username, COUNT(*) AS cnt").

@@ -301,15 +301,26 @@ func (h *ErrorScanHandler) GetOverview(c *gin.Context) {
 		return
 	}
 
-	patterns := make([]string, 0, len(rules))
+	// 合并精细化规则和分类规则的关键词（与 GetUnmatchedSamples 保持一致）
+	patternSet := make(map[string]bool)
 	activeCount := int64(0)
 	for _, r := range rules {
 		if r.IsAlertEnabled && !r.Suppressed {
 			activeCount++
 		}
 		if r.PatternKeyword != "" {
-			patterns = append(patterns, r.PatternKeyword)
+			patternSet[r.PatternKeyword] = true
 		}
+	}
+	classifyRules, _ := h.classifyStore.List()
+	for _, cr := range classifyRules {
+		if cr.Keyword != "" {
+			patternSet[cr.Keyword] = true
+		}
+	}
+	patterns := make([]string, 0, len(patternSet))
+	for p := range patternSet {
+		patterns = append(patterns, p)
 	}
 
 	windowHours := 1
@@ -349,7 +360,15 @@ func (h *ErrorScanHandler) GetUnmatchedSamples(c *gin.Context) {
 		patterns = append(patterns, p)
 	}
 
-	samples, err := h.logStore.GetUnmatchedErrorSamples(patterns, 20)
+	// 使用与概览统计相同的时间窗口
+	windowHours := 1
+	if wh := c.Query("window"); wh != "" {
+		if v, err := strconv.Atoi(wh); err == nil && v > 0 {
+			windowHours = v
+		}
+	}
+
+	samples, err := h.logStore.GetUnmatchedErrorSamples(patterns, 20, windowHours)
 	if err != nil {
 		h.logger.Error("get unmatched samples failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

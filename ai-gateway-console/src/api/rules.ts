@@ -433,8 +433,9 @@ export async function getOverviewStats(windowHours: number = 24): Promise<Overvi
   return res.data;
 }
 
-export async function getUnmatchedSamples(): Promise<UnmatchedSample[]> {
-  const res = await request<{ data: UnmatchedSample[] }>('/error-scan/unmatched-samples');
+export async function getUnmatchedSamples(windowHours?: number): Promise<UnmatchedSample[]> {
+  const params = windowHours ? `?window=${windowHours}` : '';
+  const res = await request<{ data: UnmatchedSample[] }>(`/error-scan/unmatched-samples${params}`);
   return res.data || [];
 }
 
