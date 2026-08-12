@@ -2702,7 +2702,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             复制
                           </button>
                         </div>
-                        <pre className="text-[11px] font-mono text-[#191c1e] bg-[#1e1e1e] text-[#dcdcaa] p-3 rounded leading-[16px] overflow-x-auto whitespace-pre-wrap max-h-[120px] overflow-y-auto">
+                        <pre className="text-[11px] font-mono text-[#191c1e] bg-[#1e1e1e] text-[#dcdcaa] p-3 rounded leading-[16px] overflow-x-auto whitespace-pre-wrap">
                           {sample.content}
                         </pre>
                       </div>
@@ -2814,7 +2814,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                             复制
                           </button>
                         </div>
-                        <pre className="text-[11px] font-mono text-[#dcdcaa] bg-[#1e1e1e] p-3 rounded leading-[16px] overflow-x-auto whitespace-pre-wrap max-h-[100px] overflow-y-auto">
+                        <pre className="text-[11px] font-mono text-[#dcdcaa] bg-[#1e1e1e] p-3 rounded leading-[16px] overflow-x-auto whitespace-pre-wrap">
                           {sample.content}
                         </pre>
                       </div>
