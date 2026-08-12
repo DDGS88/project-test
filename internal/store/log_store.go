@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"tt-inspector/internal/model"
@@ -36,6 +37,13 @@ func (s *LogStore) negateOp() string {
 		return "!~*"
 	}
 	return "NOT REGEXP"
+}
+
+// escapeRegex 转义正则特殊字符，使关键词作为字面量匹配
+var regexSpecialChars = regexp.MustCompile(`([\\.*+?^${}()|[\]{}])`)
+
+func escapeRegex(s string) string {
+	return regexSpecialChars.ReplaceAllString(s, `\$1`)
 }
 
 // CountByCondition 按条件统计日志数量
@@ -96,7 +104,7 @@ func (s *LogStore) CountRegex(startTime, endTime int64, channelId int, field, pa
 	if negate {
 		op = s.negateOp()
 	}
-	query = query.Where(field+" "+op+" ?", pattern)
+	query = query.Where(field+" "+op+" ?", escapeRegex(pattern))
 
 	var count int64
 	if err := query.Count(&count).Error; err != nil {
@@ -136,7 +144,7 @@ func (s *LogStore) GetRegexSamples(startTime, endTime int64, channelId int, fiel
 		op = s.negateOp()
 	}
 
-	query = query.Where(field+" "+op+" ?", pattern).
+	query = query.Where(field+" "+op+" ?", escapeRegex(pattern)).
 		Order("created_at DESC").
 		Limit(5)
 
@@ -171,7 +179,7 @@ func (s *LogStore) CountErrorLogsGrouped(startTime, endTime int64, patternKeywor
 		Select(fmt.Sprintf("%s AS group_value, COUNT(*) AS count", col)).
 		Where("created_at >= ? AND created_at < ?", startTime, endTime).
 		Where("type = ?", 5).
-		Where("content "+s.regexOp+" ?", patternKeyword).
+		Where("content "+s.regexOp+" ?", escapeRegex(patternKeyword)).
 		Group(col).
 		Order("count DESC")
 
@@ -354,7 +362,7 @@ func (s *LogStore) GetOverviewStats(rulePatterns []string, windowHours int) (*Ov
 		if err := s.db.Model(&model.Log{}).
 			Where("type = ?", 5).
 			Where("created_at >= ?", since).
-			Where("content "+s.regexOp+" ?", pattern).
+			Where("content "+s.regexOp+" ?", escapeRegex(pattern)).
 			Count(&cnt).Error; err != nil {
 			return nil, err
 		}
@@ -394,7 +402,7 @@ func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int, wi
 	// 排除已匹配的 pattern（逐个 NOT REGEXP / !~*）
 	for _, pattern := range rulePatterns {
 		if pattern != "" {
-			query = query.Where("content "+s.negateOp()+" ?", pattern)
+			query = query.Where("content "+s.negateOp()+" ?", escapeRegex(pattern))
 		}
 	}
 
