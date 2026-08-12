@@ -16,6 +16,8 @@ import {
   createRuleFromSample,
   getFallbackConfig,
   setFallbackConfig,
+  getAlertAtUsers,
+  setAlertAtUsers,
   getGroupedStats,
   getGroupedSamples,
   classifyLog,
@@ -238,6 +240,10 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [fallbackEnabled, setFallbackEnabled] = useState(false);
   const [fallbackWebhook, setFallbackWebhook] = useState('');
 
+  // 告警@用户配置
+  const [alertAtUsers, setAlertAtUsersState] = useState<string[]>([]);
+  const [atUsersInput, setAtUsersInput] = useState('');
+
   // Classify rules management state
   const [classifyRules, setClassifyRules] = useState<ClassifyRule[]>([]);
   const [newClassifyKeyword, setNewClassifyKeyword] = useState('');
@@ -313,12 +319,18 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     setGroupDetails({});
   }, [groupDimension, groupWindow]);
 
-  // Load fallback config on mount
+  // Load fallback config and alert at-users on mount
   useEffect(() => {
     getFallbackConfig()
       .then((cfg) => {
         setFallbackEnabled(cfg.enabled);
         setFallbackWebhook(cfg.webhook || '');
+      })
+      .catch(() => {});
+    getAlertAtUsers()
+      .then((users) => {
+        setAlertAtUsersState(users || []);
+        setAtUsersInput((users || []).join(', '));
       })
       .catch(() => {});
   }, []);
@@ -1215,6 +1227,53 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* 告警@用户配置 */}
+        <div className="bg-[#f7f9fb] border border-[#e0e3e5] rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-[#004ac6]">alternate_email</span>
+              <span className="text-[13px] font-semibold text-[#191c1e]">告警 @用户</span>
+            </div>
+            <button
+              onClick={async () => {
+                const users = atUsersInput
+                  .split(/[,，\s]+/)
+                  .map((u) => u.trim())
+                  .filter(Boolean);
+                try {
+                  await setAlertAtUsers(users);
+                  setAlertAtUsersState(users);
+                  onShowToast(`已保存 ${users.length} 个@用户`);
+                } catch (err: any) {
+                  onShowToast(`保存失败: ${err.message}`);
+                }
+              }}
+              className="px-3 py-1.5 bg-[#004ac6] hover:bg-[#003ea8] text-white text-[12px] font-medium rounded-lg transition-colors"
+            >
+              保存
+            </button>
+          </div>
+          <p className="text-[11px] text-[#737686]">
+            输入飞书用户 ID（多个用逗号分隔），告警发送时会自动 @这些用户
+          </p>
+          <input
+            type="text"
+            value={atUsersInput}
+            onChange={(e) => setAtUsersInput(e.target.value)}
+            placeholder="例如: ou_xxxx, ou_yyyy"
+            className="w-full bg-white border border-[#c3c6d7] rounded-lg px-3 py-2 font-mono text-[12px] outline-none focus:ring-2 focus:ring-[#004ac6]"
+          />
+          {alertAtUsers.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {alertAtUsers.map((u, i) => (
+                <span key={i} className="text-[10px] text-[#004ac6] bg-[#eeefff] px-1.5 py-0.5 rounded font-mono">
+                  {u}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-between border-b border-[#e0e3e5] pb-3">

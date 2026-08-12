@@ -466,6 +466,18 @@ export async function setFallbackConfig(enabled: boolean, webhook: string): Prom
   });
 }
 
+export async function getAlertAtUsers(): Promise<string[]> {
+  const res = await request<{ data: string[] }>('/error-scan/alert-at-users');
+  return res.data;
+}
+
+export async function setAlertAtUsers(users: string[]): Promise<void> {
+  await request('/error-scan/alert-at-users', {
+    method: 'POST',
+    body: JSON.stringify({ users }),
+  });
+}
+
 export interface GroupedStatItem {
   group_value: string;
   count: number;

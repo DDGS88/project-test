@@ -13,6 +13,7 @@ type AlertMessage struct {
 	Condition   string          `json:"condition"`
 	Description string          `json:"description"`
 	Samples     []LogSampleItem `json:"samples"`
+	AtUsers     []string        `json:"at_users"`
 }
 
 // LogSampleItem 匹配到的单条日志样本

@@ -95,6 +95,17 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 		},
 	}
 
+	if len(msg.AtUsers) > 0 {
+		atContent := ""
+		for _, u := range msg.AtUsers {
+			atContent += fmt.Sprintf(`<at user_id="%s"></at>`, u)
+		}
+		card.Card.Elements = append(card.Card.Elements, FeishuCardElement{
+			Tag:     "markdown",
+			Content: atContent,
+		})
+	}
+
 	body, err := json.Marshal(card)
 	if err != nil {
 		return fmt.Errorf("marshal card: %w", err)

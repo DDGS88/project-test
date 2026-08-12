@@ -501,6 +501,23 @@ func (h *ErrorScanHandler) SetFallbackConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
+func (h *ErrorScanHandler) GetAlertAtUsers(c *gin.Context) {
+	users := h.scanner.GetAlertAtUsers()
+	c.JSON(http.StatusOK, gin.H{"data": users})
+}
+
+func (h *ErrorScanHandler) SetAlertAtUsers(c *gin.Context) {
+	var body struct {
+		Users []string `json:"users"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	h.scanner.SetAlertAtUsers(body.Users)
+	c.JSON(http.StatusOK, gin.H{"data": body.Users})
+}
+
 func (h *ErrorScanHandler) GetGroupedStats(c *gin.Context) {
 	dimension := c.DefaultQuery("dimension", "channel")
 	windowHours := 1

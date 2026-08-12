@@ -31,6 +31,9 @@ type ErrorScanner struct {
 	fallbackWebhook  string
 	fallbackMu       sync.RWMutex
 	fallbackCooldown time.Time
+	// 全局告警@用户
+	alertAtUsers []string
+	atUsersMu    sync.RWMutex
 }
 
 // NewErrorScanner 创建错误扫描器
@@ -110,6 +113,20 @@ func (s *ErrorScanner) GetFallbackConfig() (bool, string) {
 	return s.fallbackEnabled, s.fallbackWebhook
 }
 
+// SetAlertAtUsers 设置全局告警@用户
+func (s *ErrorScanner) SetAlertAtUsers(users []string) {
+	s.atUsersMu.Lock()
+	defer s.atUsersMu.Unlock()
+	s.alertAtUsers = users
+}
+
+// GetAlertAtUsers 获取全局告警@用户
+func (s *ErrorScanner) GetAlertAtUsers() []string {
+	s.atUsersMu.RLock()
+	defer s.atUsersMu.RUnlock()
+	return s.alertAtUsers
+}
+
 // checkFallbackAlert 检查是否需要发送兜底告警
 func (s *ErrorScanner) checkFallbackAlert() {
 	s.fallbackMu.RLock()
@@ -152,6 +169,7 @@ func (s *ErrorScanner) checkFallbackAlert() {
 			Condition:   "type=5 未命中任何规则",
 			Description: fmt.Sprintf("当前有 %d 条 type=5 错误日志未被任何精细化规则覆盖，总匹配率 %.1f%%，请及时添加规则",
 				stats.UnmatchedErrors, stats.MatchRate),
+			AtUsers: s.GetAlertAtUsers(),
 		}
 
 		if err := s.notifier.Send(webhook, msg); err != nil {
@@ -369,6 +387,7 @@ func (s *ErrorScanner) sendAlert(rule *store.ErrorScanRule, groupValue string, c
 		WindowEnd:   time.Unix(windowEnd, 0),
 		Condition:   fmt.Sprintf("关键词: %s | 粒度: %s", rule.PatternKeyword, rule.AlertGranularity),
 		Description: fmt.Sprintf("%s 本周期共出现 %d 次错误", rule.SubCategory, count),
+		AtUsers:     s.GetAlertAtUsers(),
 	}
 
 	if err := s.notifier.Send(webhookURL, msg); err != nil {
@@ -405,6 +424,7 @@ func (s *ErrorScanner) sendGroupAlert(rule *store.ErrorScanRule, groupValue stri
 		Condition:   fmt.Sprintf("关键词: %s | %s: %s", rule.PatternKeyword, rule.AlertGranularity, groupValue),
 		Description: fmt.Sprintf("%s(%s) 本周期出现 %d 次错误，超过阈值 %d",
 			rule.SubCategory, groupValue, count, rule.AlertThreshold),
+		AtUsers: s.GetAlertAtUsers(),
 	}
 
 	if err := s.notifier.Send(webhookURL, msg); err != nil {
