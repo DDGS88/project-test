@@ -344,7 +344,30 @@ func (s *LogStore) GetOverviewStats(rulePatterns []string, windowHours int) (*Ov
 	stats := &OverviewStats{}
 	since := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
 
-	// 总 type=5 错误数
+	// 先查已匹配数（带更严格的 WHERE 条件，结果集更小）
+	// 注意：先查 matched 再查 total，即使期间有新日志写入，
+	// total 也会 >= matched，避免 unmatched 出现负数。
+	stats.MatchedErrors = 0
+	validPatterns := make([]string, 0, len(rulePatterns))
+	args := make([]interface{}, 0, len(rulePatterns))
+	for _, p := range rulePatterns {
+		if p != "" {
+			validPatterns = append(validPatterns, "content "+s.regexOp+" ?")
+			args = append(args, escapeRegex(p))
+		}
+	}
+	if len(validPatterns) > 0 {
+		orClause := "(" + strings.Join(validPatterns, " OR ") + ")"
+		if err := s.db.Model(&model.Log{}).
+			Where("type = ?", 5).
+			Where("created_at >= ?", since).
+			Where(orClause, args...).
+			Count(&stats.MatchedErrors).Error; err != nil {
+			return nil, err
+		}
+	}
+
+	// 再查总 type=5 错误数
 	if err := s.db.Model(&model.Log{}).
 		Where("type = ?", 5).
 		Where("created_at >= ?", since).
@@ -352,21 +375,9 @@ func (s *LogStore) GetOverviewStats(rulePatterns []string, windowHours int) (*Ov
 		return nil, err
 	}
 
-	// 已匹配数：各规则的 pattern 匹配的总数
-	stats.MatchedErrors = 0
-	for _, pattern := range rulePatterns {
-		if pattern == "" {
-			continue
-		}
-		var cnt int64
-		if err := s.db.Model(&model.Log{}).
-			Where("type = ?", 5).
-			Where("created_at >= ?", since).
-			Where("content "+s.regexOp+" ?", escapeRegex(pattern)).
-			Count(&cnt).Error; err != nil {
-			return nil, err
-		}
-		stats.MatchedErrors += cnt
+	// 兜底保护：防止极端并发情况下 matched > total
+	if stats.MatchedErrors > stats.TotalErrors {
+		stats.MatchedErrors = stats.TotalErrors
 	}
 
 	stats.UnmatchedErrors = stats.TotalErrors - stats.MatchedErrors
