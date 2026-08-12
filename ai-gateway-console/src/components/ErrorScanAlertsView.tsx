@@ -18,6 +18,8 @@ import {
   setFallbackConfig,
   getAlertAtUsers,
   setAlertAtUsers,
+  getGlobalWebhookURL,
+  setGlobalWebhookURL,
   getGroupedStats,
   getGroupedSamples,
   classifyLog,
@@ -172,9 +174,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   const [globalScanGranularity, setGlobalScanGranularity] = useState<ScanGranularity>('小时 (Hourly)');
   const [globalAlertGranularity, setGlobalAlertGranularity] = useState<AlertGranularity>('按错误精细类型');
   const [minAlertThreshold, setMinAlertThreshold] = useState<number>(5);
-  const [globalFeishuUrl, setGlobalFeishuUrl] = useState<string>(
-    'https://open.feishu.cn/open-apis/bot/v2/hook/4a89bc21-09df-41ef-bc82-9011abf88123'
-  );
+  const [globalFeishuUrl, setGlobalFeishuUrl] = useState<string>('');
 
   // Feishu Webhook Rule Edit Modal State
   const [editingFeishuCategory, setEditingFeishuCategory] = useState<ErrorScanCategory | null>(null);
@@ -331,6 +331,11 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       .then((users) => {
         setAlertAtUsersState(users || []);
         setAtUsersInput((users || []).join(', '));
+      })
+      .catch(() => {});
+    getGlobalWebhookURL()
+      .then((url) => {
+        if (url) setGlobalFeishuUrl(url);
       })
       .catch(() => {});
   }, []);
@@ -1137,10 +1142,26 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                   required
                   value={globalFeishuUrl}
                   onChange={(e) => setGlobalFeishuUrl(e.target.value)}
-                  placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/4a89bc21-09df-41ef-bc82-9011abf88123"
+                  onBlur={() => {
+                    if (globalFeishuUrl) {
+                      setGlobalWebhookURL(globalFeishuUrl).catch(() => {});
+                    }
+                  }}
+                  placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
                   className="w-full pl-9 pr-3.5 py-2 bg-white border border-[#c3c6d7] focus:border-[#004ac6] rounded-lg font-mono text-[12.5px] outline-none focus:ring-2 focus:ring-[#004ac6] text-[#191c1e] shadow-2xs"
                 />
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setGlobalWebhookURL(globalFeishuUrl)
+                    .then(() => onShowToast('Webhook 地址已保存'))
+                    .catch((err) => onShowToast(`保存失败: ${err.message}`));
+                }}
+                className="px-3 py-2 bg-[#004ac6] hover:bg-[#003ea8] text-white text-[12px] font-medium rounded-lg transition-colors whitespace-nowrap"
+              >
+                保存
+              </button>
             </div>
 
             {/* Quick Presets */}

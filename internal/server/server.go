@@ -95,6 +95,9 @@ func Run(cfg *config.Config) error {
 	if err := logDB.AutoMigrate(&store.ErrorClassifyRule{}); err != nil {
 		return fmt.Errorf("auto migrate error_classify_rules: %w", err)
 	}
+	if err := logDB.AutoMigrate(&store.ScanSetting{}); err != nil {
+		logger.Warn("failed to migrate scan_settings table", zap.Error(err))
+	}
 
 	// stores: rule + log 用 logDB，channel 用 businessDB
 	ruleStore := store.NewRuleStore(logDB)

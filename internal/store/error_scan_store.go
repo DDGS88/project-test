@@ -9,6 +9,9 @@ import (
 // ErrorScanRule 别名
 type ErrorScanRule = model.ErrorScanRule
 
+// ScanSetting 别名
+type ScanSetting = model.ScanSetting
+
 // ErrorScanStore 错误扫描规则 CRUD
 type ErrorScanStore struct {
 	db *gorm.DB
@@ -113,4 +116,19 @@ func (s *ErrorScanStore) UpdateThresholdAndExcludes(id int64, threshold int, exc
 		"filter_mode":      filterMode,
 	}
 	return s.db.Model(&ErrorScanRule{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// GetSetting 获取设置值
+func (s *ErrorScanStore) GetSetting(key string) (string, error) {
+	var setting ScanSetting
+	err := s.db.Where("key = ?", key).First(&setting).Error
+	if err == gorm.ErrRecordNotFound {
+		return "", nil
+	}
+	return setting.Value, err
+}
+
+// SetSetting 设置设置值
+func (s *ErrorScanStore) SetSetting(key, value string) error {
+	return s.db.Where("key = ?", key).Assign(ScanSetting{Value: value}).FirstOrCreate(&ScanSetting{Key: key}).Error
 }

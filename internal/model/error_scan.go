@@ -32,3 +32,9 @@ type ErrorScanRule struct {
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
+
+// ScanSetting 错误扫描全局设置（键值对存储）
+type ScanSetting struct {
+	Key   string `gorm:"type:varchar(64);primaryKey" json:"key"`
+	Value string `gorm:"type:text" json:"value"`
+}

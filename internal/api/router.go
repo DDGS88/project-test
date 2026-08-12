@@ -74,6 +74,8 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 		api.POST("/error-scan/fallback-config", errorScanHandler.SetFallbackConfig)
 		api.GET("/error-scan/alert-at-users", errorScanHandler.GetAlertAtUsers)
 		api.POST("/error-scan/alert-at-users", errorScanHandler.SetAlertAtUsers)
+		api.GET("/error-scan/global-webhook", errorScanHandler.GetGlobalWebhookURL)
+		api.POST("/error-scan/global-webhook", errorScanHandler.SetGlobalWebhookURL)
 		api.GET("/error-scan/grouped-stats", errorScanHandler.GetGroupedStats)
 		api.GET("/error-scan/grouped-samples", errorScanHandler.GetGroupedSamples)
 		api.POST("/error-scan/classify-log", errorScanHandler.ClassifyLog)

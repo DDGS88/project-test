@@ -34,6 +34,8 @@ type ErrorScanner struct {
 	// 全局告警@用户
 	alertAtUsers []string
 	atUsersMu    sync.RWMutex
+	// 全局 webhook URL
+	globalWebhookURL string
 }
 
 // NewErrorScanner 创建错误扫描器
@@ -45,7 +47,7 @@ func NewErrorScanner(
 	pollInterval time.Duration,
 	cooldownSeconds int,
 ) *ErrorScanner {
-	return &ErrorScanner{
+	s := &ErrorScanner{
 		db:              db,
 		logStore:        store.NewLogStore(db),
 		scanStore:       scanStore,
@@ -55,6 +57,14 @@ func NewErrorScanner(
 		cooldowns:       make(map[int64]map[string]time.Time),
 		cooldownSeconds: cooldownSeconds,
 	}
+	// 加载持久化的全局配置
+	if webhook, _ := scanStore.GetSetting("global_webhook_url"); webhook != "" {
+		s.globalWebhookURL = webhook
+	}
+	if usersStr, _ := scanStore.GetSetting("alert_at_users"); usersStr != "" {
+		s.alertAtUsers = strings.Split(usersStr, ",")
+	}
+	return s
 }
 
 // Run 启动扫描主循环
@@ -118,6 +128,10 @@ func (s *ErrorScanner) SetAlertAtUsers(users []string) {
 	s.atUsersMu.Lock()
 	defer s.atUsersMu.Unlock()
 	s.alertAtUsers = users
+	// 持久化
+	if s.scanStore != nil {
+		_ = s.scanStore.SetSetting("alert_at_users", strings.Join(users, ","))
+	}
 }
 
 // GetAlertAtUsers 获取全局告警@用户
@@ -125,6 +139,23 @@ func (s *ErrorScanner) GetAlertAtUsers() []string {
 	s.atUsersMu.RLock()
 	defer s.atUsersMu.RUnlock()
 	return s.alertAtUsers
+}
+
+// SetGlobalWebhookURL 设置全局 webhook URL
+func (s *ErrorScanner) SetGlobalWebhookURL(url string) {
+	s.atUsersMu.Lock()
+	defer s.atUsersMu.Unlock()
+	s.globalWebhookURL = url
+	if s.scanStore != nil {
+		_ = s.scanStore.SetSetting("global_webhook_url", url)
+	}
+}
+
+// GetGlobalWebhookURL 获取全局 webhook URL
+func (s *ErrorScanner) GetGlobalWebhookURL() string {
+	s.atUsersMu.RLock()
+	defer s.atUsersMu.RUnlock()
+	return s.globalWebhookURL
 }
 
 // checkFallbackAlert 检查是否需要发送兜底告警
@@ -193,6 +224,7 @@ func (s *ErrorScanner) TestWebhook(webhookURL string) error {
 		WindowEnd:   time.Now(),
 		Condition:   "手动测试",
 		Description: "这是一条来自 tt-inspector 错误扫描的飞书机器人连通性测试消息，如果你收到此消息说明配置正确。",
+		AtUsers:     s.GetAlertAtUsers(),
 	}
 	err := s.notifier.Send(webhookURL, msg)
 	if err != nil {

@@ -478,6 +478,18 @@ export async function setAlertAtUsers(users: string[]): Promise<void> {
   });
 }
 
+export async function getGlobalWebhookURL(): Promise<string> {
+  const res = await request<{ data: string }>('/error-scan/global-webhook');
+  return res.data;
+}
+
+export async function setGlobalWebhookURL(url: string): Promise<void> {
+  await request('/error-scan/global-webhook', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+}
+
 export interface GroupedStatItem {
   group_value: string;
   count: number;

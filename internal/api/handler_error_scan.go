@@ -518,6 +518,23 @@ func (h *ErrorScanHandler) SetAlertAtUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": body.Users})
 }
 
+func (h *ErrorScanHandler) GetGlobalWebhookURL(c *gin.Context) {
+	url := h.scanner.GetGlobalWebhookURL()
+	c.JSON(http.StatusOK, gin.H{"data": url})
+}
+
+func (h *ErrorScanHandler) SetGlobalWebhookURL(c *gin.Context) {
+	var body struct {
+		URL string `json:"url"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	h.scanner.SetGlobalWebhookURL(body.URL)
+	c.JSON(http.StatusOK, gin.H{"data": body.URL})
+}
+
 func (h *ErrorScanHandler) GetGroupedStats(c *gin.Context) {
 	dimension := c.DefaultQuery("dimension", "channel")
 	windowHours := 1
