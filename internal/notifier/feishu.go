@@ -68,11 +68,9 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 	if len(msg.Samples) > 0 {
 		content += "\n\n**匹配样本**:"
 		for i, s := range msg.Samples {
-			matchedVal := s.MatchedValue
-			if len(matchedVal) > 80 {
-				matchedVal = matchedVal[:80] + "..."
-			}
-			content += fmt.Sprintf("\n> %d. %s | MsgID: `%s` | RequestID: `%s`", i+1, matchedVal, s.ResponseID, s.RequestID)
+			content += fmt.Sprintf("\n> **#%d** | 渠道: `%s` | 模型: `%s`", i+1, s.ChannelName, s.ModelName)
+			content += fmt.Sprintf("\n> Content: %s", s.MatchedValue)
+			content += fmt.Sprintf("\n> RequestID: `%s`", s.RequestID)
 		}
 	}
 

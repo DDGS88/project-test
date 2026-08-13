@@ -21,6 +21,8 @@ type LogSampleItem struct {
 	MatchedValue string `json:"matched_value"`
 	ResponseID   string `json:"response_id"`
 	RequestID    string `json:"request_id"`
+	ChannelName  string `json:"channel_name"`
+	ModelName    string `json:"model_name"`
 }
 
 // Notifier 通知接口

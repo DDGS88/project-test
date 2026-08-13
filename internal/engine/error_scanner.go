@@ -431,6 +431,24 @@ func (s *ErrorScanner) sendAlert(rule *store.ErrorScanRule, groupValue string, c
 		AtUsers:     s.GetAlertAtUsers(),
 	}
 
+	// 获取匹配样本，融合 content、渠道、模型、request_id 到卡片
+	samples, err := s.logStore.GetRegexSamples(windowStart, windowEnd,
+		0, "content", escapeKeyword(rule.PatternKeyword), "", false, false, 5)
+	if err != nil {
+		s.logger.Warn("fetch alert samples failed", zap.Int64("rule_id", rule.Id), zap.Error(err))
+	} else {
+		msg.Samples = make([]notifier.LogSampleItem, 0, len(samples))
+		for _, sm := range samples {
+			msg.Samples = append(msg.Samples, notifier.LogSampleItem{
+				MatchedValue: sm.MatchedValue,
+				ResponseID:   sm.ResponseID,
+				RequestID:    sm.RequestID,
+				ChannelName:  sm.ChannelName,
+				ModelName:    sm.ModelName,
+			})
+		}
+	}
+
 	if err := s.notifier.Send(webhookURL, msg); err != nil {
 		s.logger.Error("send error alert failed",
 			zap.Int64("rule_id", rule.Id), zap.Error(err))
@@ -466,6 +484,24 @@ func (s *ErrorScanner) sendGroupAlert(rule *store.ErrorScanRule, groupValue stri
 		Description: fmt.Sprintf("%s(%s) 本周期出现 %d 次错误，超过阈值 %d",
 			rule.SubCategory, groupValue, count, rule.AlertThreshold),
 		AtUsers: s.GetAlertAtUsers(),
+	}
+
+	// 获取匹配样本，融合 content、渠道、模型、request_id 到卡片
+	samples, err := s.logStore.GetRegexSamples(windowStart, windowEnd,
+		0, "content", escapeKeyword(rule.PatternKeyword), "", false, false, 5)
+	if err != nil {
+		s.logger.Warn("fetch group alert samples failed", zap.Int64("rule_id", rule.Id), zap.Error(err))
+	} else {
+		msg.Samples = make([]notifier.LogSampleItem, 0, len(samples))
+		for _, sm := range samples {
+			msg.Samples = append(msg.Samples, notifier.LogSampleItem{
+				MatchedValue: sm.MatchedValue,
+				ResponseID:   sm.ResponseID,
+				RequestID:    sm.RequestID,
+				ChannelName:  sm.ChannelName,
+				ModelName:    sm.ModelName,
+			})
+		}
 	}
 
 	if err := s.notifier.Send(webhookURL, msg); err != nil {
