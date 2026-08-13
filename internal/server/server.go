@@ -115,7 +115,7 @@ func Run(cfg *config.Config) error {
 	feishuNotifier := notifier.NewFeishuNotifier(logger)
 	alertEngine := engine.NewEngine(logDB, ruleStore, logStore, feishuNotifier, cfg.Engine, logger)
 
-	errorScanner := engine.NewErrorScanner(logDB, errorScanStore, feishuNotifier, logger,
+	errorScanner := engine.NewErrorScanner(logDB, errorScanStore, channelStore, feishuNotifier, logger,
 		cfg.Engine.ErrorScanPollInterval, cfg.Engine.DefaultCooldownSec)
 
 	ctx, cancel := context.WithCancel(context.Background())

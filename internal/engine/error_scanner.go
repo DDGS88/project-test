@@ -28,6 +28,7 @@ type ErrorScanner struct {
 	db              *gorm.DB
 	logStore        *store.LogStore
 	scanStore       *store.ErrorScanStore
+	channelStore    *store.ChannelStore
 	notifier        notifier.Notifier
 	logger          *zap.Logger
 	pollInterval    time.Duration
@@ -51,6 +52,7 @@ type ErrorScanner struct {
 func NewErrorScanner(
 	db *gorm.DB,
 	scanStore *store.ErrorScanStore,
+	channelStore *store.ChannelStore,
 	notifier notifier.Notifier,
 	logger *zap.Logger,
 	pollInterval time.Duration,
@@ -60,6 +62,7 @@ func NewErrorScanner(
 		db:              db,
 		logStore:        store.NewLogStore(db),
 		scanStore:       scanStore,
+		channelStore:    channelStore,
 		notifier:        notifier,
 		logger:          logger,
 		pollInterval:    pollInterval,
@@ -437,13 +440,14 @@ func (s *ErrorScanner) sendAlert(rule *store.ErrorScanRule, groupValue string, c
 	if err != nil {
 		s.logger.Warn("fetch alert samples failed", zap.Int64("rule_id", rule.Id), zap.Error(err))
 	} else {
+		channelNameMap := s.getChannelNameMap()
 		msg.Samples = make([]notifier.LogSampleItem, 0, len(samples))
 		for _, sm := range samples {
 			msg.Samples = append(msg.Samples, notifier.LogSampleItem{
 				MatchedValue: sm.MatchedValue,
 				ResponseID:   sm.ResponseID,
 				RequestID:    sm.RequestID,
-				ChannelName:  sm.ChannelName,
+				ChannelName:  channelNameMap[int64(sm.ChannelId)],
 				ModelName:    sm.ModelName,
 			})
 		}
@@ -492,13 +496,14 @@ func (s *ErrorScanner) sendGroupAlert(rule *store.ErrorScanRule, groupValue stri
 	if err != nil {
 		s.logger.Warn("fetch group alert samples failed", zap.Int64("rule_id", rule.Id), zap.Error(err))
 	} else {
+		channelNameMap := s.getChannelNameMap()
 		msg.Samples = make([]notifier.LogSampleItem, 0, len(samples))
 		for _, sm := range samples {
 			msg.Samples = append(msg.Samples, notifier.LogSampleItem{
 				MatchedValue: sm.MatchedValue,
 				ResponseID:   sm.ResponseID,
 				RequestID:    sm.RequestID,
-				ChannelName:  sm.ChannelName,
+				ChannelName:  channelNameMap[int64(sm.ChannelId)],
 				ModelName:    sm.ModelName,
 			})
 		}
@@ -516,6 +521,19 @@ func (s *ErrorScanner) sendGroupAlert(rule *store.ErrorScanRule, groupValue stri
 		zap.Int64("rule_id", rule.Id),
 		zap.String("group_value", groupValue),
 		zap.Int("count", count))
+}
+
+// getChannelNameMap 获取渠道 id → 名称映射（失败时返回空 map）
+func (s *ErrorScanner) getChannelNameMap() map[int64]string {
+	if s.channelStore == nil {
+		return map[int64]string{}
+	}
+	m, err := s.channelStore.GetChannelNameMap()
+	if err != nil {
+		s.logger.Warn("get channel name map failed", zap.Error(err))
+		return map[int64]string{}
+	}
+	return m
 }
 
 // checkCooldown 检查冷却期，返回 true 表示可以发送
