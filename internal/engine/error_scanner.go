@@ -449,6 +449,7 @@ func (s *ErrorScanner) sendAlert(rule *store.ErrorScanRule, groupValue string, c
 				RequestID:    sm.RequestID,
 				ChannelName:  channelNameMap[int64(sm.ChannelId)],
 				ModelName:    sm.ModelName,
+				IsStream:     sm.IsStream,
 			})
 		}
 	}
@@ -505,6 +506,7 @@ func (s *ErrorScanner) sendGroupAlert(rule *store.ErrorScanRule, groupValue stri
 				RequestID:    sm.RequestID,
 				ChannelName:  channelNameMap[int64(sm.ChannelId)],
 				ModelName:    sm.ModelName,
+				IsStream:     sm.IsStream,
 			})
 		}
 	}

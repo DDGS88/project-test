@@ -17,6 +17,7 @@ type LogSample struct {
 	RequestID    string `json:"request_id"`
 	ChannelId    int    `json:"channel_id"`
 	ModelName    string `json:"model_name"`
+	IsStream     bool   `json:"is_stream"`
 }
 
 // LogStore 日志查询（只读）
@@ -122,7 +123,7 @@ func (s *LogStore) GetRegexSamples(startTime, endTime int64, channelId int, fiel
 	}
 
 	query := s.db.Model(&model.Log{}).
-		Select(fmt.Sprintf("%s AS matched_value, response_id, request_id, channel_id, model_name", field)).
+		Select(fmt.Sprintf("%s AS matched_value, response_id, request_id, channel_id, model_name, is_stream", field)).
 		Where("created_at >= ? AND created_at < ?", startTime, endTime)
 
 	if channelId > 0 {

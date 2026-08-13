@@ -23,6 +23,7 @@ type LogSampleItem struct {
 	RequestID    string `json:"request_id"`
 	ChannelName  string `json:"channel_name"`
 	ModelName    string `json:"model_name"`
+	IsStream     bool   `json:"is_stream"`
 }
 
 // Notifier 通知接口
