@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>消费解析服务</title>
+<style>
+  :root {
+    --bg: #f0f2f5; --card: #fff; --text: #333; --muted: #888;
+    --accent: #4f6ef7; --accent2: #22c55e; --danger: #ef4444;
+    --border: #e5e7eb; --radius: 10px;
+  }
+  * {margin:0;padding:0;box-sizing:border-box;}
+  body {font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  .header {background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;}
+  .header h1 {font-size:20px;display:flex;align-items:center;gap:8px;}
+  .header .dot {width:8px;height:8px;background:var(--accent2);border-radius:50%;display:inline-block;}
+
+  .container {max-width:1100px;margin:0 auto;padding:24px 20px;}
+
+  /* 上传区 */
+  .upload-section {display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;}
+  .upload-box {background:var(--card);border-radius:var(--radius);padding:20px;border:2px dashed var(--border);text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+  .upload-box:hover,.upload-box.dragover {border-color:var(--accent);background:#f8faff;}
+  .upload-box.has-file {border-style:solid;border-color:var(--accent2);background:#f8fff9;}
+  .upload-box input[type=file] {position:absolute;inset:0;opacity:0;cursor:pointer;}
+  .upload-box .icon {font-size:32px;margin-bottom:8px;}
+  .upload-box .label {font-size:14px;font-weight:600;}
+  .upload-box .hint {font-size:12px;color:var(--muted);margin-top:4px;}
+  .upload-box .file-info {font-size:13px;color:var(--accent);margin-top:8px;}
+
+  /* 按钮 */
+  .btn-row {display:flex;gap:12px;align-items:center;margin-bottom:24px;}
+  .btn {padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
+  .btn-primary {background:var(--accent);color:#fff;}
+  .btn-primary:hover {opacity:.9;}
+  .btn-primary:disabled {opacity:.5;cursor:not-allowed;}
+  .btn-outline {background:var(--card);color:var(--accent);border:1px solid var(--accent);}
+  .btn-outline:hover {background:#f0f4ff;}
+  .btn-danger {background:var(--card);color:var(--danger);border:1px solid var(--danger);}
+
+  /* 状态 */
+  .status {padding:10px 16px;border-radius:8px;margin-bottom:16px;font-size:13px;display:none;}
+  .status.show {display:block;}
+  .status.info {background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;}
+  .status.success {background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;}
+  .status.error {background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;}
+
+  /* 进度条 */
+  .progress-bar {width:100%;height:6px;background:#e5e7eb;border-radius:3px;margin-top:10px;overflow:hidden;display:none;}
+  .progress-bar.show {display:block;}
+  .progress-bar .fill {height:100%;background:var(--accent);border-radius:3px;transition:width .3s ease;width:0;}
+  .progress-text {font-size:12px;color:var(--accent);text-align:center;margin-top:4px;display:none;}
+  .progress-text.show {display:block;}
+
+  /* 解析结果摘要 */
+  .parse-summary {background:var(--card);border-radius:var(--radius);padding:20px;margin-bottom:24px;border:1px solid var(--border);display:none;}
+  .parse-summary.show {display:block;}
+  .parse-summary h3 {font-size:16px;margin-bottom:12px;}
+  .summary-cards {display:flex;gap:16px;flex-wrap:wrap;}
+  .sum-card {flex:1;min-width:120px;padding:12px 16px;background:var(--bg);border-radius:8px;}
+  .sum-card .sl {font-size:11px;color:var(--muted);text-transform:uppercase;}
+  .sum-card .sv {font-size:20px;font-weight:700;margin-top:4px;}
+  .sum-card .sv.sv-accent {color:var(--accent);}
+  .sum-card .sv.sv-green {color:var(--accent2);}
+  .open-report {margin-top:16px;display:inline-block;}
+
+  /* 表格 */
+  .section {margin-bottom:30px;}
+  .section h2 {font-size:16px;margin-bottom:12px;}
+  .table-wrap {overflow-x:auto;background:var(--card);border-radius:var(--radius);border:1px solid var(--border);}
+  table {width:100%;border-collapse:collapse;font-size:13px;}
+  th {background:#f1f5f9;padding:9px 12px;text-align:left;font-weight:600;white-space:nowrap;color:var(--muted);font-size:12px;}
+  td {padding:8px 12px;border-top:1px solid var(--border);white-space:nowrap;}
+  tr:hover {background:#f8faff;}
+  .empty-row td {text-align:center;color:var(--muted);padding:30px;}
+  .num {text-align:right;}
+  .muted {color:var(--muted);font-size:12px;}
+
+  .actions {display:flex;gap:8px;}
+  .btn-sm {padding:4px 12px;font-size:12px;border-radius:6px;}
+  .loading {display:inline-block;width:16px;height:16px;border:2px solid #ccc;border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px;}
+  @keyframes spin {to {transform:rotate(360deg);}}
+
+  @media (max-width:700px) {
+    .upload-section {grid-template-columns:1fr;}
+    .summary-cards {flex-direction:column;}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span class="dot"></span> MaaS 消费解析服务</h1>
+  <span class="muted" id="headerStats"></span>
+</div>
+
+<div class="container">
+
+  <!-- 上传区 -->
+  <div class="upload-section">
+    <div class="upload-box" id="csvBox">
+      <input type="file" id="csvFile" accept=".csv,.xlsx">
+      <div class="icon">📄</div>
+      <div class="label">上传消费明细 CSV</div>
+      <div class="hint">选择 Split Detail 文件</div>
+      <div class="file-info" id="csvInfo"></div>
+      <div class="progress-bar" id="csvProgress"><div class="fill"></div></div>
+      <div class="progress-text" id="csvProgressText"></div>
+    </div>
+    <div class="upload-box" id="mappingBox">
+      <input type="file" id="mappingFile" accept=".csv,.tsv,.txt">
+      <div class="icon">🔗</div>
+      <div class="label">上传名称映射表（可选）</div>
+      <div class="hint">复用已有的 mapping 则无需重新上传</div>
+      <div class="file-info" id="mappingInfo"></div>
+      <div class="progress-bar" id="mapProgress"><div class="fill"></div></div>
+      <div class="progress-text" id="mapProgressText"></div>
+    </div>
+  </div>
+
+  <!-- 操作栏 -->
+  <div class="btn-row">
+    <button class="btn btn-primary" id="btnParse" disabled>
+      <span id="btnParseText">开始解析</span>
+    </button>
+    <button class="btn btn-outline" id="btnRefresh" onclick="loadHistory()">刷新历史</button>
+    <button class="btn btn-outline" onclick="logout()" style="margin-left:auto;">退出登录</button>
+  </div>
+
+  <div class="status" id="statusBar"></div>
+
+  <!-- 解析结果 -->
+  <div class="parse-summary" id="parseResult"></div>
+
+  <!-- 历史记录 -->
+  <div class="section">
+    <h2>解析历史</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>CSV 文件</th><th>Mapping</th><th>记录数</th><th>总 Usage</th><th>总金额</th><th>时间</th><th>操作</th>
+        </tr></thead>
+        <tbody id="historyBody">
+          <tr class="empty-row"><td colspan="8">暂无记录</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── 状态 ──
+let csvPath = null;
+let csvFileName = null;
+let mappingPath = null;
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
+
+// ── 安全解析 JSON（避免非 JSON 响应导致 "Unexpected end of JSON input"）──
+async function safeJson(r) {
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    console.error('Response not JSON:', text.substring(0, 500));
+    throw new Error(text.substring(0, 200) || `HTTP ${r.status} ${r.statusText}`);
+  }
+}
+
+// ── 分片上传核心 ──
+async function chunkedUpload(file, fileType, progressBarId, progressTextId, infoId, boxId) {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const bar = document.getElementById(progressBarId);
+  const fill = bar.querySelector('.fill');
+  const text = document.getElementById(progressTextId);
+  const info = document.getElementById(infoId);
+  const box = document.getElementById(boxId);
+
+  // 初始化
+  bar.classList.add('show');
+  text.classList.add('show');
+  fill.style.width = '0%';
+  text.textContent = '0%';
+
+  const initRes = await authFetch('/api/upload_init', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename: file.name, file_type: fileType, total_chunks: totalChunks, total_size: file.size }),
+  }).then(r => safeJson(r));
+  if (!initRes.ok) throw new Error(initRes.error);
+  const uploadId = initRes.upload_id;
+
+  // 逐片上传
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(start + CHUNK_SIZE, file.size);
+    const blob = file.slice(start, end);
+    const fd = new FormData();
+    fd.append('chunk', blob, `chunk_${i}`);
+    fd.append('upload_id', uploadId);
+    fd.append('chunk_index', String(i));
+
+    const chunkRes = await authFetch('/api/upload_chunk', { method: 'POST', body: fd }).then(r => safeJson(r));
+    if (!chunkRes.ok) throw new Error(chunkRes.error);
+
+    const pct = Math.round((chunkRes.received / totalChunks) * 100);
+    fill.style.width = pct + '%';
+    text.textContent = pct + '%';
+  }
+
+  // 完成合并
+  const doneRes = await authFetch('/api/upload_complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ upload_id: uploadId }),
+  }).then(r => safeJson(r));
+  if (!doneRes.ok) throw new Error(doneRes.error);
+
+  // 隐藏进度条
+  bar.classList.remove('show');
+  text.classList.remove('show');
+
+  info.textContent = '✓ ' + doneRes.filename;
+  box.classList.add('has-file');
+  return doneRes;
+}
+
+// ── 上传处理 ──
+const csvFile = document.getElementById('csvFile');
+const mappingFile = document.getElementById('mappingFile');
+const csvBox = document.getElementById('csvBox');
+const mappingBox = document.getElementById('mappingBox');
+
+csvFile.addEventListener('change', async () => {
+  const f = csvFile.files[0];
+  if (!f) return;
+  csvPath = null;
+  try {
+    const res = await chunkedUpload(f, 'csv', 'csvProgress', 'csvProgressText', 'csvInfo', 'csvBox');
+    csvPath = res.saved_path;
+    csvFileName = res.filename;
+    updateBtn();
+  } catch (e) {
+    showStatus('error', 'CSV 上传失败: ' + e.message);
+    document.getElementById('csvProgress').classList.remove('show');
+    document.getElementById('csvProgressText').classList.remove('show');
+  }
+});
+
+mappingFile.addEventListener('change', async () => {
+  const f = mappingFile.files[0];
+  if (!f) return;
+  mappingPath = null;
+  try {
+    const res = await chunkedUpload(f, 'mapping', 'mapProgress', 'mapProgressText', 'mappingInfo', 'mappingBox');
+    mappingPath = res.saved_path;
+    updateBtn();
+  } catch (e) {
+    showStatus('error', 'Mapping 上传失败: ' + e.message);
+    document.getElementById('mapProgress').classList.remove('show');
+    document.getElementById('mapProgressText').classList.remove('show');
+  }
+});
+
+// 拖拽支持
+['dragover','dragenter'].forEach(ev => {
+  csvBox.addEventListener(ev, e => { e.preventDefault(); csvBox.classList.add('dragover'); });
+  mappingBox.addEventListener(ev, e => { e.preventDefault(); mappingBox.classList.add('dragover'); });
+});
+['dragleave','drop'].forEach(ev => {
+  csvBox.addEventListener(ev, () => csvBox.classList.remove('dragover'));
+  mappingBox.addEventListener(ev, () => mappingBox.classList.remove('dragover'));
+});
+
+function updateBtn() {
+  document.getElementById('btnParse').disabled = !csvPath;
+  if (!csvPath) {
+    document.getElementById('btnParseText').textContent = '请先上传 CSV';
+  } else {
+    document.getElementById('btnParseText').textContent = mappingPath ? '开始解析（含映射）' : '开始解析';
+  }
+}
+
+// ── 解析 ──
+document.getElementById('btnParse').addEventListener('click', async () => {
+  const btn = document.getElementById('btnParse');
+  btn.disabled = true;
+  document.getElementById('btnParseText').innerHTML = '<span class="loading"></span>解析中...';
+  showStatus('info', '正在解析，请稍候...');
+
+  try {
+    const res = await authFetch('/api/parse', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({csv_path: csvPath, mapping_path: mappingPath}),
+    }).then(r => safeJson(r));
+
+    if (res.ok) {
+      const s = res.summary;
+      document.getElementById('parseResult').classList.add('show');
+      document.getElementById('parseResult').innerHTML = `
+        <h3>✓ 解析完成</h3>
+        <div class="summary-cards">
+          <div class="sum-card"><div class="sl">总记录数</div><div class="sv">${s.total_records.toLocaleString()}</div></div>
+          <div class="sum-card"><div class="sl">总 Usage</div><div class="sv sv-green">${s.total_usage.toLocaleString()}</div></div>
+          <div class="sum-card"><div class="sl">总金额</div><div class="sv sv-accent">${s.total_amount.toLocaleString()}</div></div>
+          <div class="sum-card"><div class="sl">Payer</div><div class="sv sv-accent">${s.users}</div></div>
+        </div>
+        <a class="btn btn-outline open-report" href="${res.html_url}" target="_blank" style="margin-top:16px;text-decoration:none;display:inline-block;">📊 打开报告</a>
+      `;
+      showStatus('success', '报告生成成功！');
+      loadHistory();
+    } else {
+      showStatus('error', res.error || '解析失败');
+    }
+  } catch(e) {
+    showStatus('error', '请求失败: ' + e.message);
+  }
+
+  btn.disabled = !csvPath;
+  document.getElementById('btnParseText').textContent = '开始解析';
+});
+
+// ── 状态提示 ──
+function showStatus(type, msg) {
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status show ' + type;
+  bar.textContent = msg;
+  if(type === 'success') setTimeout(() => bar.classList.remove('show'), 5000);
+}
+
+// ── 历史记录 ──
+async function loadHistory() {
+  let recRes, statsRes, mapRes;
+  try {
+    [recRes, statsRes, mapRes] = await Promise.all([
+      authFetch('/api/records').then(r=>safeJson(r)),
+      authFetch('/api/stats').then(r=>safeJson(r)),
+      authFetch('/api/mapping_info').then(r=>safeJson(r)),
+    ]);
+  } catch(e) {
+    console.error('loadHistory fetch error:', e);
+    return;
+  }
+
+  // header stats
+  const st = statsRes.stats || {};
+  document.getElementById('headerStats').textContent =
+    `共解析 ${st.total_parses||0} 次 | 累计 ${(st.total_records||0).toLocaleString()} 条 | 金额 ${(st.total_amount||0).toLocaleString()}`;
+
+  // mapping info
+  if (mapRes.ok && mapRes.filename) {
+    document.getElementById('mappingInfo').textContent =
+      document.getElementById('mappingInfo').textContent || '复用: ' + mapRes.filename;
+    mappingBox.classList.add('has-file');
+    if (!mappingPath) mappingPath = mapRes.path;
+  }
+
+  const records = recRes.records || [];
+  const tbody = document.getElementById('historyBody');
+  if (records.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="8">暂无记录</td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td>${r.id}</td>
+      <td title="${esc(r.csv_path)}">${trunc(r.csv_filename, 30)}</td>
+      <td class="muted">${r.mapping_file || '-'}</td>
+      <td class="num">${(r.total_records||0).toLocaleString()}</td>
+      <td class="num">${(r.total_usage||0).toLocaleString()}</td>
+      <td class="num">${(r.total_amount||0).toLocaleString()}</td>
+      <td class="muted">${r.created_at}</td>
+      <td class="actions">
+        <a class="btn btn-sm btn-outline" href="/reports/${r.html_filename}" target="_blank">报告</a>
+        <a class="btn btn-sm btn-outline" href="/api/download/${safeBtoa(r.csv_path)}" download>CSV</a>
+        <button class="btn btn-sm btn-danger" onclick="deleteRecord(${r.id})">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function trunc(s, n) { return s && s.length > n ? s.slice(0,n-2)+'…' : s; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function safeBtoa(s) {
+  try { return btoa(unescape(encodeURIComponent(s||''))); } catch(e) { return ''; }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('确定删除此解析记录？相关文件也会被删除。')) return;
+  const res = await authFetch('/api/records/' + id, {method:'DELETE'}).then(r => safeJson(r));
+  if (res.ok) {
+    showStatus('success', '已删除');
+    loadHistory();
+  }
+}
+
+async function logout() {
+  await fetch('/api/logout', {method:'POST'});
+  window.location.href = '/login';
+}
+
+// 全局 401 拦截：session 过期自动跳转登录页
+async function authFetch(url, opts = {}) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    window.location.href = '/login';
+    throw new Error('unauthorized');
+  }
+  return res;
+}
+
+// ── 初始化 ──
+loadHistory();
+</script>
+</body>
+</html>

@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MaaS 消费明细分析报告</title>
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --card: #fff;
+    --text: #333;
+    --muted: #888;
+    --accent: #4f6ef7;
+    --accent2: #22c55e;
+    --accent3: #f59e0b;
+    --border: #e5e7eb;
+    --table-stripe: #f9fafb;
+  }
+  * {margin:0;padding:0;box-sizing:border-box;}
+  body {font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;}
+  .container {max-width:1400px;margin:0 auto;padding:20px;}
+  h1 {font-size:26px;margin:20px 0 8px;}
+  .subtitle {color:var(--muted);font-size:14px;margin-bottom:24px;}
+
+  /* 概览卡片 */
+  .cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:30px;}
+  .card {background:var(--card);border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid var(--border);}
+  .card-wide {grid-column:span 2;}
+  .card .label {font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;line-height:1.3;}
+  .card .value {font-size:26px;font-weight:700;margin-top:6px;}
+  .card .value.accent {color:var(--accent);}
+  .card .value.accent2 {color:var(--accent2);}
+  .card .value.accent3 {color:var(--accent3);}
+  .card .value.time-val {font-size:14px;font-weight:600;word-break:break-all;}
+
+  /* 图表区域 */
+  .charts {display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:30px;}
+  .chart-box {background:var(--card);border-radius:12px;padding:20px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid var(--border);overflow:hidden;}
+  .chart-box h3 {font-size:15px;margin-bottom:12px;color:var(--muted);}
+  canvas {width:100%;height:300px;display:block;}
+
+  /* 表格区域 */
+  .section {margin-bottom:36px;}
+  .section h2 {font-size:18px;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .section h2 .badge {font-size:12px;background:var(--accent);color:#fff;padding:2px 10px;border-radius:99px;}
+  .table-wrap {overflow-x:auto;background:var(--card);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);border:1px solid var(--border);}
+  table {width:100%;border-collapse:collapse;font-size:13px;}
+  th {background:#f1f5f9;padding:10px 12px;text-align:left;font-weight:600;white-space:nowrap;color:var(--muted);font-size:12px;text-transform:uppercase;}
+  th.num {text-align:right;}
+  td {padding:8px 12px;border-top:1px solid var(--border);white-space:nowrap;}
+  tr:hover {background:#eef2ff;}
+  .key-cell {max-width:260px;overflow:hidden;text-overflow:ellipsis;font-family:monospace;font-size:12px;}
+  .num {text-align:right;font-variant-numeric:tabular-nums;}
+
+  /* 可展开行 */
+  .expandable-row {cursor:pointer;user-select:none;}
+  .expandable-row:hover {background:#eef2ff;}
+  .toggle-icon {width:20px;text-align:center;font-size:10px;color:var(--accent);transition:transform 0.2s;display:inline-block;}
+  .toggle-icon.open {transform:rotate(90deg);}
+  .sub-row.hidden {display:none;}
+  .sub-key {color:var(--muted);font-size:12px;}
+  .sub-num {color:var(--muted);font-size:12px;}
+  .sub-badge {font-size:10px;background:var(--border);color:var(--muted);padding:1px 6px;border-radius:99px;margin-left:6px;font-family:-apple-system,sans-serif;}
+  .footer {text-align:center;color:var(--muted);font-size:12px;padding:20px 0;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>MaaS 消费明细分析报告</h1>
+<p class="subtitle">
+  文件: 20260803062955_Split_Detail_Aug_2026.csv &nbsp;|&nbsp;
+  生成时间: 2026-08-03 06:32:58 &nbsp;|&nbsp;
+  总计 347,079 条记录
+</p>
+
+<!-- 概览卡片 -->
+<div class="cards">
+  <div class="card"><div class="label">总记录数</div><div class="value">347,079</div></div>
+  <div class="card"><div class="label">Payer 用户</div><div class="value accent">1</div></div>
+  <div class="card"><div class="label">Resource ID</div><div class="value accent">22</div></div>
+  <div class="card"><div class="label">Instance ID</div><div class="value accent">3</div></div>
+  <div class="card"><div class="label">Product</div><div class="value accent">1</div></div>
+  <div class="card"><div class="label">Project</div><div class="value accent">1</div></div>
+  <div class="card"><div class="label">总 Usage (K tokens)</div><div class="value accent2">148,319,401</div></div>
+  <div class="card"><div class="label">平均每条 Usage</div><div class="value accent2">427.34</div></div>
+  <div class="card"><div class="label">总税前金额 (USD)</div><div class="value accent3">832,098.13</div></div>
+  <div class="card"><div class="label">总税金 (USD)</div><div class="value accent3">0.00</div></div>
+  <div class="card"><div class="label">总税后金额 (USD)</div><div class="value accent3">832,098.13</div></div>
+  <div class="card"><div class="label">总应付金额 (USD)</div><div class="value accent3">422,910.44</div></div>
+  <div class="card"><div class="label">总已付金额 (USD)</div><div class="value accent3">409,187.69</div></div>
+  <div class="card card-wide"><div class="label">数据时间范围</div><div class="value time-val">2026-07-01 00:03:00 ~ 2026-08-01 00:00:00</div></div>
+</div>
+
+<!-- 柱状图 -->
+<div class="charts">
+  <div class="chart-box"><h3>Top 10 Payer - 总应付金额</h3><canvas id="chartPayer"></canvas></div>
+  <div class="chart-box"><h3>Top 10 Resource ID - 总 Usage</h3><canvas id="chartResource"></canvas></div>
+  <div class="chart-box"><h3>Top 10 Product - 总应付金额</h3><canvas id="chartProduct"></canvas></div>
+</div>
+
+<!-- 表格 1: 按 Payer User Name -->
+<div class="section">
+  <h2>按 Payer User Name <span class="badge">1</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Payer User Name</th><th class="num">记录数</th><th class="num">总 Usage</th><th class="num">平均 Usage</th><th class="num">税前金额</th><th class="num">税</th><th class="num">税后金额</th><th class="num">应付金额</th>
+      </tr></thead>
+      <tbody><tr>
+                <td>1</td>
+                <td class="key-cell" title="CREAO">CREAO</td>
+                <td class="num">347,079</td>
+                <td class="num">148,319,401.42 K tokens</td>
+                <td class="num">427.34 K tokens</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">422,910.44 USD</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 表格 2: 按 Resource ID -->
+<div class="section">
+  <h2>按 Resource ID <span class="badge">22</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Resource ID</th><th class="num">记录数</th><th class="num">总 Usage</th><th class="num">平均 Usage</th><th class="num">税前金额</th><th class="num">税</th><th class="num">税后金额</th><th class="num">应付金额</th>
+      </tr></thead>
+      <tbody><tr>
+                <td>1</td>
+                <td class="key-cell" title="apikey-20260708133244-9vr92">apikey-20260708133244-9vr92</td>
+                <td class="num">195,760</td>
+                <td class="num">93,234,751.14 K tokens</td>
+                <td class="num">476.27 K tokens</td>
+                <td class="num">540,326.66 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">540,326.66 USD</td>
+                <td class="num">268,508.54 USD</td>
+            </tr>
+<tr>
+                <td>2</td>
+                <td class="key-cell" title="apikey-20260715104538-6dbvp">apikey-20260715104538-6dbvp</td>
+                <td class="num">36,478</td>
+                <td class="num">15,734,701.24 K tokens</td>
+                <td class="num">431.35 K tokens</td>
+                <td class="num">87,544.06 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">87,544.06 USD</td>
+                <td class="num">87,544.06 USD</td>
+            </tr>
+<tr>
+                <td>3</td>
+                <td class="key-cell" title="apikey-20260615125911-9w2hz">apikey-20260615125911-9w2hz</td>
+                <td class="num">81,071</td>
+                <td class="num">31,451,376.47 K tokens</td>
+                <td class="num">387.95 K tokens</td>
+                <td class="num">161,272.90 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">161,272.90 USD</td>
+                <td class="num">50,449.83 USD</td>
+            </tr>
+<tr>
+                <td>4</td>
+                <td class="key-cell" title="apikey-20260708133234-84m69">apikey-20260708133234-84m69</td>
+                <td class="num">17,531</td>
+                <td class="num">4,511,659.77 K tokens</td>
+                <td class="num">257.35 K tokens</td>
+                <td class="num">24,993.58 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">24,993.58 USD</td>
+                <td class="num">14,772.54 USD</td>
+            </tr>
+<tr>
+                <td>5</td>
+                <td class="key-cell" title="apikey-20260622124509-ndppg">apikey-20260622124509-ndppg</td>
+                <td class="num">12,109</td>
+                <td class="num">2,137,135.73 K tokens</td>
+                <td class="num">176.49 K tokens</td>
+                <td class="num">10,588.53 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">10,588.53 USD</td>
+                <td class="num">498.02 USD</td>
+            </tr>
+<tr>
+                <td>6</td>
+                <td class="key-cell" title="apikey-20260708133248-rcf9r">apikey-20260708133248-rcf9r</td>
+                <td class="num">630</td>
+                <td class="num">138,223.13 K tokens</td>
+                <td class="num">219.4 K tokens</td>
+                <td class="num">888.63 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">888.63 USD</td>
+                <td class="num">368.77 USD</td>
+            </tr>
+<tr>
+                <td>7</td>
+                <td class="key-cell" title="apikey-20260730130947-t7zr6">apikey-20260730130947-t7zr6</td>
+                <td class="num">180</td>
+                <td class="num">50,766.75 K tokens</td>
+                <td class="num">282.04 K tokens</td>
+                <td class="num">227.98 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">227.98 USD</td>
+                <td class="num">227.98 USD</td>
+            </tr>
+<tr>
+                <td>8</td>
+                <td class="key-cell" title="apikey-20260718154655-c4m74">apikey-20260718154655-c4m74</td>
+                <td class="num">18</td>
+                <td class="num">30,058.46 K tokens</td>
+                <td class="num">1,669.91 K tokens</td>
+                <td class="num">209.90 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">209.90 USD</td>
+                <td class="num">208.14 USD</td>
+            </tr>
+<tr>
+                <td>9</td>
+                <td class="key-cell" title="apikey-20260703111852-fs522">apikey-20260703111852-fs522</td>
+                <td class="num">279</td>
+                <td class="num">70,535.31 K tokens</td>
+                <td class="num">252.81 K tokens</td>
+                <td class="num">428.34 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">428.34 USD</td>
+                <td class="num">168.98 USD</td>
+            </tr>
+<tr>
+                <td>10</td>
+                <td class="key-cell" title="apikey-20260714104219-ssp8f">apikey-20260714104219-ssp8f</td>
+                <td class="num">75</td>
+                <td class="num">19,042.39 K tokens</td>
+                <td class="num">253.9 K tokens</td>
+                <td class="num">121.89 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">121.89 USD</td>
+                <td class="num">48.33 USD</td>
+            </tr>
+<tr>
+                <td>11</td>
+                <td class="key-cell" title="apikey-20260714104046-nqp28">apikey-20260714104046-nqp28</td>
+                <td class="num">105</td>
+                <td class="num">25,902.13 K tokens</td>
+                <td class="num">246.69 K tokens</td>
+                <td class="num">174.99 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">174.99 USD</td>
+                <td class="num">35.38 USD</td>
+            </tr>
+<tr>
+                <td>12</td>
+                <td class="key-cell" title="apikey-20260730201939-xj8hz">apikey-20260730201939-xj8hz</td>
+                <td class="num">32</td>
+                <td class="num">4,683.36 K tokens</td>
+                <td class="num">146.35 K tokens</td>
+                <td class="num">28.49 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">28.49 USD</td>
+                <td class="num">28.49 USD</td>
+            </tr>
+<tr>
+                <td>13</td>
+                <td class="key-cell" title="apikey-20260607094105-sbfj7">apikey-20260607094105-sbfj7</td>
+                <td class="num">62</td>
+                <td class="num">22,064.25 K tokens</td>
+                <td class="num">355.87 K tokens</td>
+                <td class="num">116.26 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">116.26 USD</td>
+                <td class="num">28.19 USD</td>
+            </tr>
+<tr>
+                <td>14</td>
+                <td class="key-cell" title="apikey-20260714104029-dqwv8">apikey-20260714104029-dqwv8</td>
+                <td class="num">910</td>
+                <td class="num">272,444.63 K tokens</td>
+                <td class="num">299.39 K tokens</td>
+                <td class="num">1,654.42 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">1,654.42 USD</td>
+                <td class="num">14.91 USD</td>
+            </tr>
+<tr>
+                <td>15</td>
+                <td class="key-cell" title="apikey-20260708133239-rsrgw">apikey-20260708133239-rsrgw</td>
+                <td class="num">47</td>
+                <td class="num">5,790.32 K tokens</td>
+                <td class="num">123.2 K tokens</td>
+                <td class="num">35.79 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">35.79 USD</td>
+                <td class="num">8.00 USD</td>
+            </tr>
+<tr>
+                <td>16</td>
+                <td class="key-cell" title="apikey-20260607095031-nlp29">apikey-20260607095031-nlp29</td>
+                <td class="num">14</td>
+                <td class="num">2,835.11 K tokens</td>
+                <td class="num">202.51 K tokens</td>
+                <td class="num">20.16 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">20.16 USD</td>
+                <td class="num">0.28 USD</td>
+            </tr>
+<tr>
+                <td>17</td>
+                <td class="key-cell" title="apikey-20260708133211-w4kgl">apikey-20260708133211-w4kgl</td>
+                <td class="num">1,762</td>
+                <td class="num">604,676.82 K tokens</td>
+                <td class="num">343.18 K tokens</td>
+                <td class="num">3,452.61 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">3,452.61 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr>
+<tr>
+                <td>18</td>
+                <td class="key-cell" title="apikey-20260625194552-t4wsr">apikey-20260625194552-t4wsr</td>
+                <td class="num">4</td>
+                <td class="num">867.6 K tokens</td>
+                <td class="num">216.9 K tokens</td>
+                <td class="num">1.81 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">1.81 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr>
+<tr>
+                <td>19</td>
+                <td class="key-cell" title="apikey-20260718174307-56ndf">apikey-20260718174307-56ndf</td>
+                <td class="num">3</td>
+                <td class="num">326.7 K tokens</td>
+                <td class="num">108.9 K tokens</td>
+                <td class="num">1.74 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">1.74 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr>
+<tr>
+                <td>20</td>
+                <td class="key-cell" title="apikey-20260715153140-vq6fd">apikey-20260715153140-vq6fd</td>
+                <td class="num">4</td>
+                <td class="num">544.5 K tokens</td>
+                <td class="num">136.12 K tokens</td>
+                <td class="num">3.42 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">3.42 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr>
+<tr>
+                <td>21</td>
+                <td class="key-cell" title="apikey-20260717113526-gzsc8">apikey-20260717113526-gzsc8</td>
+                <td class="num">4</td>
+                <td class="num">864.53 K tokens</td>
+                <td class="num">216.13 K tokens</td>
+                <td class="num">4.92 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">4.92 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr>
+<tr>
+                <td>22</td>
+                <td class="key-cell" title="apikey-20260724151211-g2njj">apikey-20260724151211-g2njj</td>
+                <td class="num">1</td>
+                <td class="num">151.08 K tokens</td>
+                <td class="num">151.08 K tokens</td>
+                <td class="num">1.05 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">1.05 USD</td>
+                <td class="num">0.00 USD</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 表格 3: 按 User (user-username) -->
+<div class="section">
+  <h2>按 User (user-username) <span class="badge">1</span></h2>
+  <div class="table-wrap">
+    <table id="userTable">
+      <thead><tr>
+        <th></th><th>#</th><th>User</th><th class="num">记录数</th><th class="num">总 Usage</th><th class="num">平均 Usage</th><th class="num">税前金额</th><th class="num">税</th><th class="num">税后金额</th><th class="num">应付金额</th>
+      </tr></thead>
+      <tbody><tr class="expandable-row" data-target="user-row-0" onclick="toggleSub('user-row-0',this)">
+                <td class="toggle-icon">&#9654;</td>
+                <td>1</td>
+                <td class="key-cell" title="(空)">(空) <span class="sub-badge">22 keys</span></td>
+                <td class="num">347,079</td>
+                <td class="num">148,319,401.42 K tokens</td>
+                <td class="num">427.34 K tokens</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">422,910.44 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260708133244-9vr92">&nbsp;&nbsp;&#9492; apikey-20260708133244-9vr92</td>
+                <td class="num sub-num">195,760</td>
+                <td class="num sub-num">93,234,751.14 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">540,326.66 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">268,508.54 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260615125911-9w2hz">&nbsp;&nbsp;&#9492; apikey-20260615125911-9w2hz</td>
+                <td class="num sub-num">81,071</td>
+                <td class="num sub-num">31,451,376.47 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">161,272.90 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">50,449.83 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260715104538-6dbvp">&nbsp;&nbsp;&#9492; apikey-20260715104538-6dbvp</td>
+                <td class="num sub-num">36,478</td>
+                <td class="num sub-num">15,734,701.24 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">87,544.06 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">87,544.06 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260708133234-84m69">&nbsp;&nbsp;&#9492; apikey-20260708133234-84m69</td>
+                <td class="num sub-num">17,531</td>
+                <td class="num sub-num">4,511,659.77 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">24,993.58 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">14,772.54 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260622124509-ndppg">&nbsp;&nbsp;&#9492; apikey-20260622124509-ndppg</td>
+                <td class="num sub-num">12,109</td>
+                <td class="num sub-num">2,137,135.73 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">10,588.53 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">498.02 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260708133211-w4kgl">&nbsp;&nbsp;&#9492; apikey-20260708133211-w4kgl</td>
+                <td class="num sub-num">1,762</td>
+                <td class="num sub-num">604,676.82 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">3,452.61 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260714104029-dqwv8">&nbsp;&nbsp;&#9492; apikey-20260714104029-dqwv8</td>
+                <td class="num sub-num">910</td>
+                <td class="num sub-num">272,444.63 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">1,654.42 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">14.91 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260708133248-rcf9r">&nbsp;&nbsp;&#9492; apikey-20260708133248-rcf9r</td>
+                <td class="num sub-num">630</td>
+                <td class="num sub-num">138,223.13 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">888.63 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">368.77 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260703111852-fs522">&nbsp;&nbsp;&#9492; apikey-20260703111852-fs522</td>
+                <td class="num sub-num">279</td>
+                <td class="num sub-num">70,535.31 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">428.34 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">168.98 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260730130947-t7zr6">&nbsp;&nbsp;&#9492; apikey-20260730130947-t7zr6</td>
+                <td class="num sub-num">180</td>
+                <td class="num sub-num">50,766.75 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">227.98 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">227.98 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260718154655-c4m74">&nbsp;&nbsp;&#9492; apikey-20260718154655-c4m74</td>
+                <td class="num sub-num">18</td>
+                <td class="num sub-num">30,058.46 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">209.90 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">208.14 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260714104046-nqp28">&nbsp;&nbsp;&#9492; apikey-20260714104046-nqp28</td>
+                <td class="num sub-num">105</td>
+                <td class="num sub-num">25,902.13 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">174.99 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">35.38 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260607094105-sbfj7">&nbsp;&nbsp;&#9492; apikey-20260607094105-sbfj7</td>
+                <td class="num sub-num">62</td>
+                <td class="num sub-num">22,064.25 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">116.26 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">28.19 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260714104219-ssp8f">&nbsp;&nbsp;&#9492; apikey-20260714104219-ssp8f</td>
+                <td class="num sub-num">75</td>
+                <td class="num sub-num">19,042.39 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">121.89 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">48.33 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260708133239-rsrgw">&nbsp;&nbsp;&#9492; apikey-20260708133239-rsrgw</td>
+                <td class="num sub-num">47</td>
+                <td class="num sub-num">5,790.32 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">35.79 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">8.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260730201939-xj8hz">&nbsp;&nbsp;&#9492; apikey-20260730201939-xj8hz</td>
+                <td class="num sub-num">32</td>
+                <td class="num sub-num">4,683.36 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">28.49 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">28.49 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260607095031-nlp29">&nbsp;&nbsp;&#9492; apikey-20260607095031-nlp29</td>
+                <td class="num sub-num">14</td>
+                <td class="num sub-num">2,835.11 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">20.16 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.28 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260625194552-t4wsr">&nbsp;&nbsp;&#9492; apikey-20260625194552-t4wsr</td>
+                <td class="num sub-num">4</td>
+                <td class="num sub-num">867.6 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">1.81 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260717113526-gzsc8">&nbsp;&nbsp;&#9492; apikey-20260717113526-gzsc8</td>
+                <td class="num sub-num">4</td>
+                <td class="num sub-num">864.53 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">4.92 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260715153140-vq6fd">&nbsp;&nbsp;&#9492; apikey-20260715153140-vq6fd</td>
+                <td class="num sub-num">4</td>
+                <td class="num sub-num">544.5 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">3.42 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260718174307-56ndf">&nbsp;&nbsp;&#9492; apikey-20260718174307-56ndf</td>
+                <td class="num sub-num">3</td>
+                <td class="num sub-num">326.7 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">1.74 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr>
+<tr class="sub-row hidden" data-parent="user-row-0">
+                <td></td>
+                <td></td>
+                <td class="key-cell sub-key" title="apikey-20260724151211-g2njj">&nbsp;&nbsp;&#9492; apikey-20260724151211-g2njj</td>
+                <td class="num sub-num">1</td>
+                <td class="num sub-num">151.08 K tokens</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">1.05 USD</td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num"></td>
+                <td class="num sub-num">0.00 USD</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 表格 4: 按 Product -->
+<div class="section">
+  <h2>按 Product <span class="badge">1</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Product</th><th class="num">记录数</th><th class="num">总 Usage</th><th class="num">平均 Usage</th><th class="num">税前金额</th><th class="num">税</th><th class="num">税后金额</th><th class="num">应付金额</th>
+      </tr></thead>
+      <tbody><tr>
+                <td>1</td>
+                <td class="key-cell" title="ModelArk_video_generation">ModelArk_video_generation</td>
+                <td class="num">347,079</td>
+                <td class="num">148,319,401.42 K tokens</td>
+                <td class="num">427.34 K tokens</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">832,098.13 USD</td>
+                <td class="num">422,910.44 USD</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 表格 5: 按 Instance ID -->
+<div class="section">
+  <h2>按 Instance ID <span class="badge">3</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Instance ID</th><th class="num">记录数</th><th class="num">总 Usage</th><th class="num">平均 Usage</th><th class="num">税前金额</th><th class="num">税</th><th class="num">税后金额</th><th class="num">应付金额</th>
+      </tr></thead>
+      <tbody><tr>
+                <td>1</td>
+                <td class="key-cell" title="muti-20260528141404-tr8n4">muti-20260528141404-tr8n4</td>
+                <td class="num">181,802</td>
+                <td class="num">95,880,964.82 K tokens</td>
+                <td class="num">527.39 K tokens</td>
+                <td class="num">617,596.15 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">617,596.15 USD</td>
+                <td class="num">342,279.92 USD</td>
+            </tr>
+<tr>
+                <td>2</td>
+                <td class="key-cell" title="muti-20260528141404-nglmv">muti-20260528141404-nglmv</td>
+                <td class="num">86,059</td>
+                <td class="num">20,190,070.87 K tokens</td>
+                <td class="num">234.61 K tokens</td>
+                <td class="num">105,269.48 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">105,269.48 USD</td>
+                <td class="num">47,652.31 USD</td>
+            </tr>
+<tr>
+                <td>3</td>
+                <td class="key-cell" title="muti-20260623105343-9z64t">muti-20260623105343-9z64t</td>
+                <td class="num">79,218</td>
+                <td class="num">32,248,365.73 K tokens</td>
+                <td class="num">407.08 K tokens</td>
+                <td class="num">109,232.50 USD</td>
+                <td class="num">0.00 USD</td>
+                <td class="num">109,232.50 USD</td>
+                <td class="num">32,978.21 USD</td>
+            </tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="footer">Generated by parse_and_report.py &mdash; 2026-08-03 06:32:58</div>
+</div>
+
+<!-- Canvas 柱状图 -->
+<script>
+// ── 可展开行 toggle ──
+function toggleSub(rowId, el) {
+  const icon = el.querySelector('.toggle-icon');
+  const subRows = document.querySelectorAll('.sub-row[data-parent="' + rowId + '"]');
+  const isOpen = !subRows[0].classList.contains('hidden');
+  subRows.forEach(r => r.classList.toggle('hidden', isOpen));
+  icon.classList.toggle('open', !isOpen);
+  icon.innerHTML = isOpen ? '&#9654;' : '&#9660;';
+}
+
+(function() {
+  const charts = [
+    { id: "chartPayer", labels: ['CREAO'], values: [422910.44], label: "Amount Due" },
+    { id: "chartResource", labels: ['apikey-20260708133244-9vr92', 'apikey-20260715104538-6dbvp', 'apikey-20260615125911-9w2hz', 'apikey-20260708133234-84m69', 'apikey-20260622124509-ndppg', 'apikey-20260708133248-rcf9r', 'apikey-20260730130947-t7zr6', 'apikey-20260718154655-c4m74', 'apikey-20260703111852-fs522', 'apikey-20260714104219-ssp8f'], values: [93234751.14, 15734701.24, 31451376.47, 4511659.77, 2137135.73, 138223.13, 50766.75, 30058.46, 70535.31, 19042.39], label: "Total Usage" },
+    { id: "chartProduct", labels: ['ModelArk_video_generation'], values: [422910.44], label: "Amount Due" },
+  ];
+
+  const COLORS = ['#4f6ef7','#22c55e','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#14b8a6','#f97316','#6366f1'];
+
+  charts.forEach(c => {
+    const canvas = document.getElementById(c.id);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = 300 * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = '300px';
+    ctx.scale(dpr, dpr);
+
+    const w = rect.width, h = 300;
+    const pad = { top: 30, right: 20, bottom: 80, left: 60 };
+    const cw = w - pad.left - pad.right;
+    const ch = h - pad.top - pad.bottom;
+
+    const maxVal = Math.max(...c.values, 1);
+    const barW = Math.max(6, cw / c.labels.length * 0.6);
+    const gap = cw / c.labels.length;
+
+    // 背景
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+
+    // Y 轴刻度线
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    const ySteps = 5;
+    for (let i = 0; i <= ySteps; i++) {
+      const y = pad.top + (ch / ySteps) * i;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+      ctx.fillStyle = '#888';
+      ctx.font = '11px -apple-system,sans-serif';
+      ctx.textAlign = 'right';
+      const val = (maxVal / ySteps) * (ySteps - i);
+      ctx.fillText(val.toFixed(val < 10 ? 2 : 0), pad.left - 6, y + 4);
+    }
+
+    // 柱状条
+    c.values.forEach((v, i) => {
+      const x = pad.left + gap * i + (gap - barW) / 2;
+      const barH = (v / maxVal) * ch;
+      const y = pad.top + ch - barH;
+      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.beginPath();
+      ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
+      ctx.fill();
+
+      // 值标注
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 10px -apple-system,sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(v.toFixed(v < 10 ? 2 : 0), x + barW / 2, y - 6);
+    });
+
+    // X 轴标签
+    ctx.fillStyle = '#555';
+    ctx.font = '10px -apple-system,sans-serif';
+    c.labels.forEach((label, i) => {
+      const x = pad.left + gap * i + gap / 2;
+      ctx.save();
+      ctx.translate(x, pad.top + ch + 16);
+      ctx.rotate(-0.5);
+      const txt = label.length > 28 ? label.slice(0, 26) + '..' : label;
+      ctx.fillText(txt, 0, 0);
+      ctx.restore();
+    });
+  });
+})();
+</script>
+</body>
+</html>
