@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -247,7 +248,7 @@ func (s *ErrorScanner) TestWebhook(webhookURL string) error {
 	return err
 }
 
-// scanAll 遍历所有启用的错误扫描规则
+// scanAll 一次查询窗口内错误日志，内存中批量匹配所有启用的规则
 func (s *ErrorScanner) scanAll() {
 	rules, err := s.scanStore.List()
 	if err != nil {
@@ -255,109 +256,142 @@ func (s *ErrorScanner) scanAll() {
 		return
 	}
 
+	// 过滤出启用且有关键词的规则
+	var activeRules []*store.ErrorScanRule
 	for i := range rules {
 		rule := &rules[i]
 		if !rule.IsAlertEnabled || rule.Suppressed {
-			s.logger.Debug("skip rule (not enabled or suppressed)",
-				zap.Int64("rule_id", rule.Id),
-				zap.String("name", rule.Name),
-				zap.Bool("enabled", rule.IsAlertEnabled),
-				zap.Bool("suppressed", rule.Suppressed))
 			continue
 		}
 		if rule.PatternKeyword == "" {
-			s.logger.Debug("skip rule (no keyword)",
-				zap.Int64("rule_id", rule.Id),
-				zap.String("name", rule.Name))
 			continue
 		}
-		s.scanRule(rule)
+		activeRules = append(activeRules, rule)
+	}
+	if len(activeRules) == 0 {
+		return
+	}
+
+	now := time.Now()
+	windowEnd := now.Unix()
+	pollSec := int64(s.GetPollInterval().Seconds())
+
+	// 按扫描粒度分窗口，分别只查询一次日志
+	var hourlyRules, dailyRules []*store.ErrorScanRule
+	for _, rule := range activeRules {
+		if rule.ScanGranularity == "天 (Daily)" {
+			dailyRules = append(dailyRules, rule)
+		} else {
+			hourlyRules = append(hourlyRules, rule)
+		}
+	}
+
+	if len(hourlyRules) > 0 {
+		s.scanRulesInMemory(hourlyRules, windowEnd-pollSec, windowEnd)
+	}
+	if len(dailyRules) > 0 {
+		s.scanRulesInMemory(dailyRules, windowEnd-86400, windowEnd)
 	}
 }
 
-// scanRule 扫描单条规则
-func (s *ErrorScanner) scanRule(rule *store.ErrorScanRule) {
-	now := time.Now()
-	windowEnd := now.Unix()
-
-	// 确定时间窗口：使用轮询间隔，每次只统计新数据，避免重复告警
-	windowSec := int64(s.GetPollInterval().Seconds())
-	if rule.ScanGranularity == "天 (Daily)" {
-		windowSec = 86400
-	}
-	windowStart := windowEnd - windowSec
-
-	// 按错误精细类型：直接统计总数，不分组
-	if rule.AlertGranularity == "按错误精细类型" {
-		totalCount, err := s.logStore.CountRegex(windowStart, windowEnd,
-			0, "content", escapeKeyword(rule.PatternKeyword), "", false, false, 5)
-		if err != nil {
-			s.logger.Error("count error logs failed",
-				zap.Int64("rule_id", rule.Id), zap.Error(err))
-			return
-		}
-
-		s.logger.Debug("scan rule result",
-			zap.Int64("rule_id", rule.Id),
-			zap.String("name", rule.Name),
-			zap.String("keyword", rule.PatternKeyword),
-			zap.Int64("count", totalCount),
-			zap.Int("threshold", rule.AlertThreshold),
-			zap.String("webhook", truncateURL(rule.FeishuWebhook)))
-
-		// 更新计数
-		s.updateCounts(rule, int(totalCount))
-
-		if totalCount >= int64(rule.AlertThreshold) {
-			s.sendAlert(rule, "总览", int(totalCount), windowStart, windowEnd)
-		} else {
-			s.logger.Debug("below alert threshold",
-				zap.Int64("rule_id", rule.Id),
-				zap.Int64("count", totalCount),
-				zap.Int("threshold", rule.AlertThreshold))
-		}
-		return
-	}
-
-	// 按维度分组统计
-	groupCounts, err := s.logStore.CountErrorLogsGrouped(
-		windowStart, windowEnd, rule.PatternKeyword, rule.AlertGranularity)
+// scanRulesInMemory 对一批规则，在已查询的日志切片上做内存匹配
+func (s *ErrorScanner) scanRulesInMemory(rules []*store.ErrorScanRule, windowStart, windowEnd int64) {
+	logs, err := s.logStore.GetErrorLogsForScan(windowStart, windowEnd)
 	if err != nil {
-		s.logger.Error("count error logs grouped failed",
-			zap.Int64("rule_id", rule.Id), zap.Error(err))
+		s.logger.Error("failed to load error logs for scan", zap.Error(err))
 		return
 	}
 
-	s.logger.Debug("scan rule grouped result",
-		zap.Int64("rule_id", rule.Id),
-		zap.String("name", rule.Name),
-		zap.String("keyword", rule.PatternKeyword),
-		zap.String("granularity", rule.AlertGranularity),
-		zap.Int("groups", len(groupCounts)),
-		zap.Int("threshold", rule.AlertThreshold))
+	for _, rule := range rules {
+		keyword := strings.ToLower(rule.PatternKeyword)
 
-	// 构建排除集合
-	filterSet := s.buildExcludeSet(rule)
-	hasFilter := len(filterSet) > 0
+		// 按错误精细类型：直接统计总数，不分组
+		if rule.AlertGranularity == "按错误精细类型" {
+			totalCount := 0
+			for i := range logs {
+				if strings.Contains(strings.ToLower(logs[i].Content), keyword) {
+					totalCount++
+				}
+			}
 
-	// 累计总数
-	totalCount := 0
-	for _, gc := range groupCounts {
-		// 检查是否需要跳过
-		if s.shouldSkip(gc.GroupValue, filterSet, rule.FilterMode, hasFilter) {
+			s.logger.Debug("scan rule result",
+				zap.Int64("rule_id", rule.Id),
+				zap.String("name", rule.Name),
+				zap.String("keyword", rule.PatternKeyword),
+				zap.Int("count", totalCount),
+				zap.Int("threshold", rule.AlertThreshold),
+				zap.String("webhook", truncateURL(rule.FeishuWebhook)))
+
+			s.updateCounts(rule, totalCount)
+
+			if totalCount >= rule.AlertThreshold {
+				s.sendAlert(rule, "总览", totalCount, windowStart, windowEnd)
+			}
 			continue
 		}
 
-		totalCount += int(gc.Count)
-
-		// 超过阈值则告警
-		if gc.Count >= int64(rule.AlertThreshold) {
-			s.sendGroupAlert(rule, gc.GroupValue, int(gc.Count), windowStart, windowEnd)
+		// 按维度分组统计
+		groupCounts := make(map[string]int)
+		for i := range logs {
+			if !strings.Contains(strings.ToLower(logs[i].Content), keyword) {
+				continue
+			}
+			groupCounts[s.groupValueOf(rule.AlertGranularity, &logs[i])]++
 		}
-	}
 
-	// 更新汇总计数
-	s.updateCounts(rule, totalCount)
+		s.logger.Debug("scan rule grouped result",
+			zap.Int64("rule_id", rule.Id),
+			zap.String("name", rule.Name),
+			zap.String("keyword", rule.PatternKeyword),
+			zap.String("granularity", rule.AlertGranularity),
+			zap.Int("groups", len(groupCounts)),
+			zap.Int("threshold", rule.AlertThreshold))
+
+		// 构建排除集合
+		filterSet := s.buildExcludeSet(rule)
+		hasFilter := len(filterSet) > 0
+
+		// 按 count 降序排序，保持告警顺序稳定
+		type groupEntry struct {
+			value string
+			count int
+		}
+		entries := make([]groupEntry, 0, len(groupCounts))
+		for v, c := range groupCounts {
+			entries = append(entries, groupEntry{value: v, count: c})
+		}
+		sort.Slice(entries, func(i, j int) bool { return entries[i].count > entries[j].count })
+
+		// 累计总数
+		totalCount := 0
+		for _, e := range entries {
+			if s.shouldSkip(e.value, filterSet, rule.FilterMode, hasFilter) {
+				continue
+			}
+
+			totalCount += e.count
+
+			if e.count >= rule.AlertThreshold {
+				s.sendGroupAlert(rule, e.value, e.count, windowStart, windowEnd)
+			}
+		}
+
+		s.updateCounts(rule, totalCount)
+	}
+}
+
+// groupValueOf 根据告警粒度从日志条目中提取分组值
+func (s *ErrorScanner) groupValueOf(granularity string, lg *store.ScanLogEntry) string {
+	switch granularity {
+	case "按模型":
+		return lg.ModelName
+	case "按渠道":
+		return lg.ChannelName
+	case "按用户":
+		return lg.Username
+	default:
+		return ""
+	}
 }
 
 // buildExcludeSet 构建排除集合（filterMode=include时反转为选中集合）

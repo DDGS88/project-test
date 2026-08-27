@@ -148,6 +148,24 @@ func (e *Engine) reloadRules() {
 	e.logger.Info("rules reloaded", zap.Int("count", len(rules)))
 }
 
+// regexGroupKey 正则规则的批量统计分组键
+// 只有这些条件完全相同的规则才能合并到同一条 SQL 中统计。
+type regexGroupKey struct {
+	windowStart  int64
+	channelId    int
+	field        string
+	modelName    string
+	negate       bool
+	excludeEmpty bool
+	logType      int
+}
+
+// regexGroupItem 分组内的单条规则及其正则 pattern
+type regexGroupItem struct {
+	rule    *store.AlertRule
+	pattern string
+}
+
 func (e *Engine) evaluateAll() {
 	// 定期重载规则
 	if time.Since(e.lastReload) >= e.cfg.RuleReloadInterval {
@@ -165,9 +183,78 @@ func (e *Engine) evaluateAll() {
 	now := time.Now()
 	windowEnd := now.Unix()
 
+	// 正则规则按条件签名分组，合并为批量统计
+	groups := make(map[regexGroupKey][]regexGroupItem)
+
 	for i := range rules {
 		rule := &rules[i]
-		e.evaluateRule(rule, windowEnd)
+
+		// 非正则规则走原逻辑（当前均为 Noop，返回 0）
+		if rule.RuleType != "regex" {
+			e.evaluateRule(rule, windowEnd)
+			continue
+		}
+
+		// 冷却期跳过
+		if e.inCooldown(rule) {
+			continue
+		}
+
+		var cond RegexCondition
+		if err := ParseJSON(rule.Condition, &cond); err != nil {
+			e.logger.Warn("parse regex condition failed",
+				zap.Int64("rule_id", rule.Id), zap.Error(err))
+			continue
+		}
+		if cond.Field == "" {
+			cond.Field = "content"
+		}
+		if cond.Pattern == "" {
+			continue
+		}
+
+		windowSec := rule.WindowSec
+		if windowSec <= 0 {
+			windowSec = e.cfg.DefaultWindowSec
+		}
+		windowStart := windowEnd - int64(windowSec)
+
+		key := regexGroupKey{
+			windowStart:  windowStart,
+			channelId:    cond.ChannelId,
+			field:        cond.Field,
+			modelName:    cond.ModelName,
+			negate:       cond.Negate,
+			excludeEmpty: cond.ExcludeEmpty,
+			logType:      cond.LogType,
+		}
+		groups[key] = append(groups[key], regexGroupItem{rule: rule, pattern: cond.Pattern})
+	}
+
+	// 每组一条 SQL 批量统计
+	for key, items := range groups {
+		patterns := make([]string, 0, len(items))
+		for _, it := range items {
+			patterns = append(patterns, it.pattern)
+		}
+
+		counts, err := e.logStore.CountRegexBatch(
+			key.windowStart, windowEnd,
+			key.channelId, key.field, key.modelName,
+			key.negate, key.excludeEmpty, key.logType,
+			patterns,
+		)
+		if err != nil {
+			e.logger.Error("batch regex count failed", zap.Error(err))
+			continue
+		}
+
+		for idx, it := range items {
+			if idx >= len(counts) {
+				break
+			}
+			e.triggerAlert(it.rule, counts[idx], key.windowStart, windowEnd)
+		}
 	}
 
 	// 更新游标
@@ -176,13 +263,17 @@ func (e *Engine) evaluateAll() {
 	e.checkpointMu.Unlock()
 }
 
-func (e *Engine) evaluateRule(rule *store.AlertRule, windowEnd int64) {
-	// 冷却期检查
+// inCooldown 判断规则是否处于冷却期
+func (e *Engine) inCooldown(rule *store.AlertRule) bool {
 	e.cooldownsMu.Lock()
 	lastAlert, exists := e.cooldowns[rule.Id]
 	e.cooldownsMu.Unlock()
 
-	if exists && time.Since(lastAlert) < time.Duration(rule.CooldownSec)*time.Second {
+	return exists && time.Since(lastAlert) < time.Duration(rule.CooldownSec)*time.Second
+}
+
+func (e *Engine) evaluateRule(rule *store.AlertRule, windowEnd int64) {
+	if e.inCooldown(rule) {
 		return
 	}
 
@@ -207,6 +298,11 @@ func (e *Engine) evaluateRule(rule *store.AlertRule, windowEnd int64) {
 		return
 	}
 
+	e.triggerAlert(rule, matchCount, windowStart, windowEnd)
+}
+
+// triggerAlert 判断阈值并发送告警（含冷却期更新）
+func (e *Engine) triggerAlert(rule *store.AlertRule, matchCount int64, windowStart, windowEnd int64) {
 	if matchCount < int64(rule.Threshold) {
 		return
 	}

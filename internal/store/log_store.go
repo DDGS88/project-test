@@ -116,6 +116,63 @@ func (s *LogStore) CountRegex(startTime, endTime int64, channelId int, field, pa
 	return count, nil
 }
 
+// CountRegexBatch 批量统计多个正则的匹配数量（共享同一组过滤条件）
+// 将 N 次 COUNT 合并为 1 次 SUM(CASE WHEN)，窗口内只扫一遍日志。
+// 返回的计数与 patterns 一一对应。
+func (s *LogStore) CountRegexBatch(startTime, endTime int64, channelId int, field, modelName string, negate, excludeEmpty bool, logType int, patterns []string) ([]int64, error) {
+	if !allowedFields[field] {
+		return nil, fmt.Errorf("invalid field: %s", field)
+	}
+	if len(patterns) == 0 {
+		return []int64{}, nil
+	}
+
+	query := s.db.Model(&model.Log{}).
+		Where("created_at >= ? AND created_at < ?", startTime, endTime)
+
+	if channelId > 0 {
+		query = query.Where("channel_id = ?", channelId)
+	}
+
+	if modelName != "" && modelName != "全部模型" {
+		query = query.Where("model_name = ?", modelName)
+	}
+
+	if logType > 0 {
+		query = query.Where("type = ?", logType)
+	}
+
+	if excludeEmpty {
+		query = query.Where(field + " != ''")
+	}
+
+	op := s.regexOp
+	if negate {
+		op = s.negateOp()
+	}
+
+	selects := make([]string, 0, len(patterns))
+	args := make([]interface{}, 0, len(patterns))
+	for _, p := range patterns {
+		selects = append(selects,
+			fmt.Sprintf("COALESCE(SUM(CASE WHEN %s %s ? THEN 1 ELSE 0 END), 0)", field, op))
+		args = append(args, p)
+	}
+
+	query = query.Select(strings.Join(selects, ", "), args...)
+
+	counts := make([]int64, len(patterns))
+	dest := make([]interface{}, len(patterns))
+	for i := range counts {
+		dest[i] = &counts[i]
+	}
+
+	if err := query.Row().Scan(dest...); err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
 // GetRegexSamples 获取匹配正则的日志样本（前5条，含匹配字段值 + request_id）
 func (s *LogStore) GetRegexSamples(startTime, endTime int64, channelId int, field, pattern, modelName string, negate, excludeEmpty bool, logType int) ([]LogSample, error) {
 	if !allowedFields[field] {
@@ -158,39 +215,24 @@ func (s *LogStore) GetRegexSamples(startTime, endTime int64, channelId int, fiel
 	return samples, nil
 }
 
-// GroupCount 按维度分组的统计结果
-type GroupCount struct {
-	GroupValue string `json:"group_value"`
-	Count      int64  `json:"count"`
+// ScanLogEntry 扫描匹配用的错误日志条目（内存批量匹配规则）
+type ScanLogEntry struct {
+	Content     string
+	ChannelName string
+	ModelName   string
+	Username    string
 }
 
-// alertGranularityFields 告警粒度到数据库字段的映射
-var alertGranularityFields = map[string]string{
-	"按模型": "model_name",
-	"按渠道": "channel_name",
-	"按用户": "username",
-}
-
-// CountErrorLogsGrouped 统计 type=5 错误日志并按维度分组
-func (s *LogStore) CountErrorLogsGrouped(startTime, endTime int64, patternKeyword, groupByField string) ([]GroupCount, error) {
-	col, ok := alertGranularityFields[groupByField]
-	if !ok {
-		return nil, fmt.Errorf("unsupported alert granularity: %s", groupByField)
-	}
-
-	query := s.db.Model(&model.Log{}).
-		Select(fmt.Sprintf("%s AS group_value, COUNT(*) AS count", col)).
-		Where("created_at >= ? AND created_at < ?", startTime, endTime).
+// GetErrorLogsForScan 获取窗口内 type=5 错误日志，供内存批量匹配规则
+// 一次查询即可供所有规则使用，避免每条规则各自扫表做正则。
+func (s *LogStore) GetErrorLogsForScan(startTime, endTime int64) ([]ScanLogEntry, error) {
+	var results []ScanLogEntry
+	err := s.db.Model(&model.Log{}).
+		Select("content, channel_name, model_name, username").
 		Where("type = ?", 5).
-		Where("content "+s.regexOp+" ?", escapeRegex(patternKeyword)).
-		Group(col).
-		Order("count DESC")
-
-	var results []GroupCount
-	if err := query.Scan(&results).Error; err != nil {
-		return nil, err
-	}
-	return results, nil
+		Where("created_at >= ? AND created_at < ?", startTime, endTime).
+		Scan(&results).Error
+	return results, err
 }
 
 // GroupedStatItem 按维度分组的统计项

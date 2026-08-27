@@ -202,7 +202,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Grouped stats state
   const [groupedStats, setGroupedStats] = useState<GroupedStatItem[]>([]);
   const [groupDimension, setGroupDimension] = useState('channel');
-  const [groupWindow, setGroupWindow] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [groupDetails, setGroupDetails] = useState<Record<string, GroupedErrorDetail[]>>({});
   const [groupDetailsLoading, setGroupDetailsLoading] = useState<Set<string>>(new Set());
@@ -220,7 +219,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Overview stats state
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
-  const [overviewWindow, setOverviewWindow] = useState(1);
 
   // Unmatched samples state
   const [unmatchedSamples, setUnmatchedSamples] = useState<UnmatchedSample[]>([]);
@@ -281,7 +279,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
 
   // Load overview stats
   const loadOverviewStats = () => {
-    getOverviewStats(overviewWindow)
+    getOverviewStats(1)
       .then(setOverviewStats)
       .catch((err) => {
         onShowToast(`概览数据加载失败: ${err.message}`);
@@ -299,14 +297,9 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     loadGroupedStats();
   }, [categories.length]);
 
-  // Reload overview when window changes
-  useEffect(() => {
-    loadOverviewStats();
-  }, [overviewWindow]);
-
   // Load grouped stats
   const loadGroupedStats = () => {
-    getGroupedStats(groupDimension, groupWindow)
+    getGroupedStats(groupDimension, 1)
       .then(setGroupedStats)
       .catch(() => {});
   };
@@ -315,7 +308,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
     loadGroupedStats();
     setExpandedGroups(new Set());
     setGroupDetails({});
-  }, [groupDimension, groupWindow]);
+  }, [groupDimension]);
 
   // Load fallback config and alert at-users on mount
   useEffect(() => {
@@ -615,7 +608,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Load unmatched samples and open panel
   const handleOpenUnmatchedPanel = () => {
     setUnmatchedLoading(true);
-    getUnmatchedSamples(overviewWindow)
+    getUnmatchedSamples(1)
       .then((data) => {
         setUnmatchedSamples(data);
         setShowUnmatchedPanel(true);
@@ -711,7 +704,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       setConvertClassifyResult(null);
       // 刷新未匹配样本列表
       loadOverviewStats();
-      getUnmatchedSamples(overviewWindow)
+      getUnmatchedSamples(1)
         .then(setUnmatchedSamples)
         .catch(() => {});
       // 刷新精细化规则列表，使新规则立即可见
@@ -724,7 +717,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
   // Refresh unmatched samples
   const handleRefreshUnmatched = () => {
     setUnmatchedLoading(true);
-    getUnmatchedSamples(overviewWindow)
+    getUnmatchedSamples(1)
       .then(setUnmatchedSamples)
       .catch(() => onShowToast('刷新未匹配样本失败'))
       .finally(() => setUnmatchedLoading(false));
@@ -1425,24 +1418,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
       </div>
 
       {/* Overview Dashboard Cards */}
-      <div className="flex items-center gap-3 mb-3">
-        <span className="text-[11px] font-semibold text-[#737686] whitespace-nowrap">时间范围</span>
-        <div className="flex gap-1">
-          {[1, 6, 12, 24].map(h => (
-            <button
-              key={h}
-              onClick={() => setOverviewWindow(h)}
-              className={`px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors ${
-                overviewWindow === h
-                  ? 'bg-[#004ac6] text-white'
-                  : 'bg-[#e0e3e5] text-[#434655] hover:bg-[#c3c6d7]'
-              }`}
-            >
-              {h}h
-            </button>
-          ))}
-        </div>
-      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* 总错误日志 */}
         <div className="bg-white border border-[#c3c6d7] p-5 rounded-xl shadow-2xs">
@@ -1523,15 +1498,6 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
               <option value="user">按用户</option>
               <option value="keyword">按关键词</option>
             </select>
-            <select
-              value={groupWindow}
-              onChange={(e) => setGroupWindow(parseInt(e.target.value) || 1)}
-              className="bg-white border border-[#c3c6d7] rounded-lg px-2 py-1 text-[12px] font-medium outline-none"
-            >
-              <option value={1}>最近1小时</option>
-              <option value={6}>最近6小时</option>
-              <option value={24}>最近24小时</option>
-            </select>
           </div>
           <div className="flex items-center gap-2 text-[11px]">
             <button
@@ -1573,7 +1539,7 @@ export const ErrorScanAlertsView: React.FC<ErrorScanAlertsViewProps> = ({
                         if (!groupDetails[item.group_value] && !groupDetailsLoading.has(item.group_value)) {
                           setGroupDetailsLoading(prev => new Set(prev).add(item.group_value));
                           try {
-                            const samples = await getGroupedSamples(groupDimension, item.raw_key || item.group_value, groupWindow);
+                            const samples = await getGroupedSamples(groupDimension, item.raw_key || item.group_value, 1);
                             setGroupDetails(prev => ({ ...prev, [item.group_value]: samples }));
                           } catch { /* ignore */ }
                           setGroupDetailsLoading(prev => {
