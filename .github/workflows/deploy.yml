@@ -50,8 +50,8 @@ jobs:
         if: github.ref == 'refs/heads/develop'
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 43.156.153.171
-          port: 36000
+          host: 43.128.87.71
+          port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           source: "tt-inspector.tar"
@@ -61,8 +61,8 @@ jobs:
         if: github.ref == 'refs/heads/develop'
         uses: appleboy/ssh-action@v1
         with:
-          host: 43.156.153.171
-          port: 36000
+          host: 43.128.87.71
+          port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
@@ -98,8 +98,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: 43.156.153.171
-          port: 36000
+          host: 43.128.87.71
+          port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           source: "tt-inspector.tar"
@@ -109,8 +109,8 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v1
         with:
-          host: 43.156.153.171
-          port: 36000
+          host: 43.128.87.71
+          port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
