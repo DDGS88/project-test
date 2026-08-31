@@ -2,7 +2,7 @@ package store
 
 import (
 	"fmt"
-	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"tt-inspector/internal/model"
@@ -40,13 +40,6 @@ func (s *LogStore) negateOp() string {
 		return "!~*"
 	}
 	return "NOT REGEXP"
-}
-
-// escapeRegex 转义正则特殊字符，使关键词作为字面量匹配
-var regexSpecialChars = regexp.MustCompile(`([\\.*+?^${}()|[\]{}])`)
-
-func escapeRegex(s string) string {
-	return regexSpecialChars.ReplaceAllString(s, `\$1`)
 }
 
 // CountByCondition 按条件统计日志数量
@@ -385,42 +378,37 @@ type OverviewStats struct {
 }
 
 // GetOverviewStats 获取指定时间窗口内错误日志概览统计
+// 通过内存匹配统计，避免将大量关键词拼成正则 OR 全表扫描打满 CPU
 func (s *LogStore) GetOverviewStats(rulePatterns []string, windowHours int) (*OverviewStats, error) {
 	stats := &OverviewStats{}
 	since := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
 
-	// 先查已匹配数（带更严格的 WHERE 条件，结果集更小）
-	// 注意：先查 matched 再查 total，即使期间有新日志写入，
-	// total 也会 >= matched，避免 unmatched 出现负数。
-	stats.MatchedErrors = 0
-	validPatterns := make([]string, 0, len(rulePatterns))
-	args := make([]interface{}, 0, len(rulePatterns))
-	for _, p := range rulePatterns {
-		if p != "" {
-			validPatterns = append(validPatterns, "content "+s.regexOp+" ?")
-			args = append(args, escapeRegex(p))
-		}
-	}
-	if len(validPatterns) > 0 {
-		orClause := "(" + strings.Join(validPatterns, " OR ") + ")"
-		if err := s.db.Model(&model.Log{}).
-			Where("type = ?", 5).
-			Where("created_at >= ?", since).
-			Where(orClause, args...).
-			Count(&stats.MatchedErrors).Error; err != nil {
-			return nil, err
-		}
-	}
-
-	// 再查总 type=5 错误数
-	if err := s.db.Model(&model.Log{}).
-		Where("type = ?", 5).
-		Where("created_at >= ?", since).
-		Count(&stats.TotalErrors).Error; err != nil {
+	// 一次性拉取窗口内 type=5 错误日志，内存做大小写不敏感子串匹配
+	entries, err := s.GetErrorLogsForScan(since, time.Now().Unix())
+	if err != nil {
 		return nil, err
 	}
 
-	// 兜底保护：防止极端并发情况下 matched > total
+	keywords := make([]string, 0, len(rulePatterns))
+	for _, p := range rulePatterns {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			keywords = append(keywords, strings.ToLower(p))
+		}
+	}
+
+	stats.TotalErrors = int64(len(entries))
+	stats.MatchedErrors = 0
+	for i := range entries {
+		content := strings.ToLower(entries[i].Content)
+		for _, kw := range keywords {
+			if strings.Contains(content, kw) {
+				stats.MatchedErrors++
+				break
+			}
+		}
+	}
+
 	if stats.MatchedErrors > stats.TotalErrors {
 		stats.MatchedErrors = stats.TotalErrors
 	}
@@ -445,26 +433,104 @@ type ErrorSampleWithId struct {
 }
 
 // GetUnmatchedErrorSamples 获取指定时间窗口内未匹配规则的错误样本
+// 内存匹配 + 聚合，避免将大量关键词逐个拼成 NOT 正则全表扫描
 func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int, windowHours int) ([]ErrorSampleWithId, error) {
-	var results []ErrorSampleWithId
 	since := time.Now().Add(-time.Duration(windowHours) * time.Hour).Unix()
 
-	query := s.db.Model(&model.Log{}).
-		Select("MIN(id) AS id, LEFT(content, 120) AS content, other, model_name, channel_name, username, COUNT(*) AS cnt").
+	type logRow struct {
+		Id          int64
+		Content     string
+		Other       string
+		ModelName   string
+		ChannelName string
+		Username    string
+	}
+	var rows []logRow
+	if err := s.db.Model(&model.Log{}).
+		Select("id, content, other, model_name, channel_name, username").
 		Where("type = ?", 5).
 		Where("created_at >= ?", since).
-		Where("content != ''")
+		Where("content != ''").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
 
-	// 排除已匹配的 pattern（逐个 NOT REGEXP / !~*）
-	for _, pattern := range rulePatterns {
-		if pattern != "" {
-			query = query.Where("content "+s.negateOp()+" ?", escapeRegex(pattern))
+	// 规范化关键词，内存做大小写不敏感子串匹配（等价于原转义后的 ~* 字面量匹配）
+	keywords := make([]string, 0, len(rulePatterns))
+	for _, p := range rulePatterns {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			keywords = append(keywords, strings.ToLower(p))
 		}
 	}
 
-	err := query.Group("LEFT(content, 120), other, model_name, channel_name, username").
-		Order("cnt DESC").
-		Limit(limit).
-		Scan(&results).Error
-	return results, err
+	type groupKey struct {
+		content     string
+		other       string
+		modelName   string
+		channelName string
+		username    string
+	}
+	type group struct {
+		id  int64
+		cnt int64
+	}
+	groups := make(map[groupKey]*group)
+
+	for i := range rows {
+		row := rows[i]
+
+		lower := strings.ToLower(row.Content)
+		matched := false
+		for _, kw := range keywords {
+			if strings.Contains(lower, kw) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			continue
+		}
+
+		content := row.Content
+		if r := []rune(content); len(r) > 120 {
+			content = string(r[:120])
+		}
+		key := groupKey{
+			content:     content,
+			other:       row.Other,
+			modelName:   row.ModelName,
+			channelName: row.ChannelName,
+			username:    row.Username,
+		}
+
+		g, ok := groups[key]
+		if !ok {
+			g = &group{id: row.Id}
+			groups[key] = g
+		}
+		g.cnt++
+		if row.Id < g.id {
+			g.id = row.Id
+		}
+	}
+
+	results := make([]ErrorSampleWithId, 0, len(groups))
+	for key, g := range groups {
+		results = append(results, ErrorSampleWithId{
+			Id:          g.id,
+			Content:     key.content,
+			Other:       key.other,
+			ModelName:   key.modelName,
+			ChannelName: key.channelName,
+			Username:    key.username,
+			Cnt:         g.cnt,
+		})
+	}
+
+	sort.Slice(results, func(i, j int) bool { return results[i].Cnt > results[j].Cnt })
+	if len(results) > limit {
+		results = results[:limit]
+	}
+	return results, nil
 }
