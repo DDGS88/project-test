@@ -98,13 +98,13 @@ func (s *ErrorScanStore) UpdateGranularity(id int64, scanGranularity, alertGranu
 // UpdateHourlyCount 更新小时错误计数
 func (s *ErrorScanStore) UpdateHourlyCount(id int64, count int) error {
 	return s.db.Model(&ErrorScanRule{}).Where("id = ?", id).
-		Update("hourly_error_count", count).Error
+		Update("hourly_error_cnt", count).Error
 }
 
 // UpdateDailyCount 更新每天错误计数
 func (s *ErrorScanStore) UpdateDailyCount(id int64, count int) error {
 	return s.db.Model(&ErrorScanRule{}).Where("id = ?", id).
-		Update("daily_error_count", count).Error
+		Update("daily_error_cnt", count).Error
 }
 
 // UpdateThresholdAndExcludes 更新告警阈值和排除列表
