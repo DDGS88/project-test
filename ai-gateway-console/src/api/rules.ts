@@ -612,6 +612,9 @@ export async function getCacheHitRate(dimension: 'user' | 'channel'): Promise<Ca
 export interface ChannelErrorRateSeries {
   name: string;
   values: (number | null)[];
+  avg_rate: number;
+  requests: number;
+  errors: number;
 }
 
 export interface ChannelErrorRateResult {

@@ -690,8 +690,11 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 
 // ChannelErrorRateSeries 渠道错误率折线序列
 type ChannelErrorRateSeries struct {
-	Name   string     `json:"name"`
-	Values []*float64 `json:"values"` // 每个时间桶的错误率(0-100)，无数据为 null
+	Name     string     `json:"name"`
+	Values   []*float64 `json:"values"`   // 每个时间桶的错误率(0-100)，无数据为 null
+	AvgRate  float64    `json:"avg_rate"` // 窗口内平均错误率(%)，= 总错误日志/总日志
+	Requests int64      `json:"requests"` // 窗口内总日志数
+	Errors   int64      `json:"errors"`   // 窗口内错误日志数(type=5)
 }
 
 // ChannelErrorRateResult 渠道错误率统计结果
@@ -730,6 +733,7 @@ func (s *LogStore) GetChannelErrorRate(windowHours, topN int) (*ChannelErrorRate
 	}
 	type dimAgg struct {
 		total   int64
+		errors  int64
 		buckets []bucketAgg
 	}
 	dims := make(map[string]*dimAgg)
@@ -776,6 +780,7 @@ func (s *LogStore) GetChannelErrorRate(windowHours, topN int) (*ChannelErrorRate
 			d.total++
 			d.buckets[idx].total++
 			if r.Type == 5 {
+				d.errors++
 				d.buckets[idx].errors++
 			}
 		}
@@ -812,7 +817,17 @@ func (s *LogStore) GetChannelErrorRate(windowHours, topN int) (*ChannelErrorRate
 				values[i] = &v
 			}
 		}
-		series = append(series, ChannelErrorRateSeries{Name: item.key, Values: values})
+		avgRate := float64(0)
+		if d.total > 0 {
+			avgRate = float64(d.errors) / float64(d.total) * 100
+		}
+		series = append(series, ChannelErrorRateSeries{
+			Name:     item.key,
+			Values:   values,
+			AvgRate:  avgRate,
+			Requests: d.total,
+			Errors:   d.errors,
+		})
 	}
 
 	return &ChannelErrorRateResult{Buckets: buckets, Series: series}, nil

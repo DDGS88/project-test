@@ -32,6 +32,12 @@ const WINDOW_OPTIONS = [
   { value: 24, label: '最近 24 小时' },
 ];
 
+function rateTone(r: number): string {
+  if (r <= 1) return 'text-[#006242]';
+  if (r <= 5) return 'text-[#e65100]';
+  return 'text-[#ba1a1a]';
+}
+
 export const ChannelErrorRateView: React.FC = () => {
   const [windowHours, setWindowHours] = useState(2);
   const [data, setData] = useState<ChannelErrorRateResult | null>(null);
@@ -144,6 +150,55 @@ export const ChannelErrorRateView: React.FC = () => {
                 ))}
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white border border-[#c3c6d7] rounded-xl p-5 shadow-2xs space-y-4">
+        <div>
+          <h3 className="text-[16px] font-bold text-[#191c1e]">平均错误率</h3>
+          <p className="text-[12px] text-[#434655]">
+            各渠道在所选窗口内的平均错误率（= 错误日志数 / 全部日志数），按请求量降序。
+          </p>
+        </div>
+        {loading && (
+          <div className="flex items-center justify-center text-[#434655] text-[13px] py-8">
+            加载中...
+          </div>
+        )}
+        {!loading && (!data || data.series.length === 0) && (
+          <div className="flex items-center justify-center text-[#737686] text-[13px] py-8">
+            当前窗口暂无日志数据
+          </div>
+        )}
+        {!loading && data && data.series.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[12px] text-[#737686] border-b border-[#e0e3e5]">
+                  <th className="py-2 pr-3 font-medium">#</th>
+                  <th className="py-2 pr-3 font-medium">渠道</th>
+                  <th className="py-2 pr-3 font-medium text-right">错误日志</th>
+                  <th className="py-2 pr-3 font-medium text-right">全部日志</th>
+                  <th className="py-2 font-medium text-right">平均错误率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.series.map((s, i) => (
+                  <tr key={s.name} className="border-b border-[#f1f2f5] last:border-b-0">
+                    <td className="py-2.5 pr-3 text-[#737686]">{i + 1}</td>
+                    <td className="py-2.5 pr-3 font-semibold text-[#191c1e]">{s.name}</td>
+                    <td className="py-2.5 pr-3 text-right text-[#434655]">{s.errors}</td>
+                    <td className="py-2.5 pr-3 text-right text-[#434655]">{s.requests}</td>
+                    <td
+                      className={`py-2.5 text-right font-bold ${rateTone(s.avg_rate)}`}
+                    >
+                      {s.avg_rate.toFixed(2)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
