@@ -21,6 +21,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: MainTab; label: string; icon: string }[] = [
     { id: 'dashboard', label: '控制台概览', icon: 'dashboard' },
     { id: 'cache-hit-rate', label: '缓存命中率', icon: 'show_chart' },
+    { id: 'channel-error-rate', label: '渠道错误率', icon: 'error_outline' },
     { id: 'alert-rules', label: '告警规则管理', icon: 'notification_important' },
     { id: 'error-scan', label: '错误日志分析告警', icon: 'error' },
     { id: 'notification-channels', label: '通知渠道配置', icon: 'hub' },

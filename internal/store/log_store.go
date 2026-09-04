@@ -687,3 +687,133 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 
 	return &CacheHitRateResult{Buckets: buckets, Series: series}, nil
 }
+
+// ChannelErrorRateSeries 渠道错误率折线序列
+type ChannelErrorRateSeries struct {
+	Name   string     `json:"name"`
+	Values []*float64 `json:"values"` // 每个时间桶的错误率(0-100)，无数据为 null
+}
+
+// ChannelErrorRateResult 渠道错误率统计结果
+type ChannelErrorRateResult struct {
+	Buckets []string                 `json:"buckets"` // 时间桶标签，如 "09-03 23:00"
+	Series  []ChannelErrorRateSeries `json:"series"`
+}
+
+// GetChannelErrorRate 统计最近 windowHours 小时内各渠道错误率折线
+// 错误率 = type=5 错误日志数 / 该渠道全部日志数；固定输出 12 个时间桶，粒度随窗口自适应
+func (s *LogStore) GetChannelErrorRate(windowHours, topN int) (*ChannelErrorRateResult, error) {
+	if windowHours <= 0 {
+		windowHours = 2
+	}
+	if topN <= 0 {
+		topN = 10
+	}
+	bucketMinutes := 60 * windowHours / 12 // 12 个桶，粒度随窗口自适应
+	if bucketMinutes <= 0 {
+		bucketMinutes = 5
+	}
+
+	windowEnd := time.Now().Unix()
+	windowStart := windowEnd - int64(windowHours*3600)
+
+	bucketSec := int64(bucketMinutes * 60)
+	numBuckets := int((windowEnd - windowStart) / bucketSec)
+	if numBuckets <= 0 {
+		numBuckets = 1
+	}
+
+	// 每个渠道维度键的总请求量、以及每个时间桶的错误/总数累加
+	type bucketAgg struct {
+		total  int64
+		errors int64
+	}
+	type dimAgg struct {
+		total   int64
+		buckets []bucketAgg
+	}
+	dims := make(map[string]*dimAgg)
+
+	type logRow struct {
+		Type      int
+		ChannelId int
+		CreatedAt int64
+	}
+
+	// 按小时分批查询，逐批聚合后释放，避免一次性加载整个窗口的日志
+	hourSec := int64(3600)
+	for cursor := windowStart; cursor < windowEnd; cursor += hourSec {
+		chunkEnd := cursor + hourSec
+		if chunkEnd > windowEnd {
+			chunkEnd = windowEnd
+		}
+
+		var rows []logRow
+		if err := s.db.Model(&model.Log{}).
+			Select("type, channel_id, created_at").
+			Where("created_at >= ? AND created_at < ?", cursor, chunkEnd).
+			Where("channel_id != 0").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+
+		for _, r := range rows {
+			key := strconv.Itoa(r.ChannelId)
+
+			idx := int((r.CreatedAt - windowStart) / bucketSec)
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= numBuckets {
+				idx = numBuckets - 1
+			}
+
+			d, ok := dims[key]
+			if !ok {
+				d = &dimAgg{buckets: make([]bucketAgg, numBuckets)}
+				dims[key] = d
+			}
+			d.total++
+			d.buckets[idx].total++
+			if r.Type == 5 {
+				d.buckets[idx].errors++
+			}
+		}
+	}
+
+	// 按总请求量取 Top N 渠道
+	type keyWithTotal struct {
+		key   string
+		total int64
+	}
+	ordered := make([]keyWithTotal, 0, len(dims))
+	for k, d := range dims {
+		ordered = append(ordered, keyWithTotal{k, d.total})
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].total > ordered[j].total })
+	if len(ordered) > topN {
+		ordered = ordered[:topN]
+	}
+
+	// 时间桶标签，可能跨天，带日期前缀
+	buckets := make([]string, numBuckets)
+	startTime := time.Unix(windowStart, 0)
+	for i := 0; i < numBuckets; i++ {
+		buckets[i] = startTime.Add(time.Duration(i*bucketMinutes) * time.Minute).Format("01-02 15:04")
+	}
+
+	series := make([]ChannelErrorRateSeries, 0, len(ordered))
+	for _, item := range ordered {
+		d := dims[item.key]
+		values := make([]*float64, numBuckets)
+		for i := 0; i < numBuckets; i++ {
+			if d.buckets[i].total > 0 {
+				v := float64(d.buckets[i].errors) / float64(d.buckets[i].total) * 100
+				values[i] = &v
+			}
+		}
+		series = append(series, ChannelErrorRateSeries{Name: item.key, Values: values})
+	}
+
+	return &ChannelErrorRateResult{Buckets: buckets, Series: series}, nil
+}

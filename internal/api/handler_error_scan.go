@@ -675,6 +675,44 @@ func (h *ErrorScanHandler) GetCacheHitRate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
+// GetChannelErrorRate 返回最近 windowHours 小时内各渠道的错误率折线数据
+// 错误率 = type=5 错误日志数 / 该渠道全部日志数
+func (h *ErrorScanHandler) GetChannelErrorRate(c *gin.Context) {
+	window := 2
+	if v := c.Query("window"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 24 {
+			window = n
+		}
+	}
+
+	result, err := h.logStore.GetChannelErrorRate(window, 10)
+	if err != nil {
+		h.logger.Error("get channel error rate failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 将 channel_id 映射为渠道名称
+	if h.channelStore != nil {
+		nameMap, mapErr := h.channelStore.GetChannelNameMap()
+		if mapErr != nil {
+			h.logger.Warn("get channel name map failed", zap.Error(mapErr))
+		} else {
+			for i := range result.Series {
+				if id, parseErr := strconv.ParseInt(result.Series[i].Name, 10, 64); parseErr == nil {
+					if name, ok := nameMap[id]; ok && name != "" {
+						result.Series[i].Name = name
+					} else {
+						result.Series[i].Name = "渠道#" + result.Series[i].Name
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": result})
+}
+
 // ClassifyLog 根据分类规则匹配一条错误日志
 func (h *ErrorScanHandler) ClassifyLog(c *gin.Context) {
 	var body struct {

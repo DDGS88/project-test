@@ -606,3 +606,20 @@ export async function getCacheHitRate(dimension: 'user' | 'channel'): Promise<Ca
   const res = await request<{ data: CacheHitRateResult }>(`/cache-hit-rate?dimension=${dimension}`);
   return res.data;
 }
+
+// ── 渠道错误率 ──
+
+export interface ChannelErrorRateSeries {
+  name: string;
+  values: (number | null)[];
+}
+
+export interface ChannelErrorRateResult {
+  buckets: string[];
+  series: ChannelErrorRateSeries[];
+}
+
+export async function getChannelErrorRate(windowHours: number): Promise<ChannelErrorRateResult> {
+  const res = await request<{ data: ChannelErrorRateResult }>(`/error-rate?window=${windowHours}`);
+  return res.data;
+}
