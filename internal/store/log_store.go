@@ -571,13 +571,9 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 		ChannelId int
 		CreatedAt int64
 	}
-	var rows []logRow
-	if err := s.db.Model(&model.Log{}).
-		Select("other, username, channel_id, created_at").
-		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
-		Where("other != ''").
-		Scan(&rows).Error; err != nil {
-		return nil, err
+	type parsedCache struct {
+		CacheTokens         float64 `json:"cache_tokens"`
+		CacheCreationTokens float64 `json:"cache_creation_tokens"`
 	}
 
 	bucketSec := int64(bucketMinutes * 60)
@@ -597,47 +593,62 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 	}
 	dims := make(map[string]*dimAgg)
 
-	for _, r := range rows {
-		var key string
-		if dimension == "user" {
-			if r.Username == "" {
+	// 按小时分批查询，逐批聚合后释放，避免一次性加载整天的日志
+	hourSec := int64(3600)
+	for cursor := dayStart; cursor < dayEnd; cursor += hourSec {
+		chunkEnd := cursor + hourSec
+		if chunkEnd > dayEnd {
+			chunkEnd = dayEnd
+		}
+
+		var rows []logRow
+		if err := s.db.Model(&model.Log{}).
+			Select("other, username, channel_id, created_at").
+			Where("created_at >= ? AND created_at < ?", cursor, chunkEnd).
+			Where("other != ''").
+			Scan(&rows).Error; err != nil {
+			return nil, err
+		}
+
+		for _, r := range rows {
+			var key string
+			if dimension == "user" {
+				if r.Username == "" {
+					continue
+				}
+				key = r.Username
+			} else {
+				if r.ChannelId == 0 {
+					continue
+				}
+				key = strconv.Itoa(r.ChannelId)
+			}
+
+			var parsed parsedCache
+			if err := json.Unmarshal([]byte(r.Other), &parsed); err != nil {
 				continue
 			}
-			key = r.Username
-		} else {
-			if r.ChannelId == 0 {
+			if parsed.CacheTokens == 0 && parsed.CacheCreationTokens == 0 {
 				continue
 			}
-			key = strconv.Itoa(r.ChannelId)
-		}
 
-		var parsed struct {
-			CacheTokens         float64 `json:"cache_tokens"`
-			CacheCreationTokens float64 `json:"cache_creation_tokens"`
-		}
-		if err := json.Unmarshal([]byte(r.Other), &parsed); err != nil {
-			continue
-		}
-		if parsed.CacheTokens == 0 && parsed.CacheCreationTokens == 0 {
-			continue
-		}
+			idx := int((r.CreatedAt - dayStart) / bucketSec)
+			if idx < 0 {
+				idx = 0
+			}
+			if idx >= numBuckets {
+				idx = numBuckets - 1
+			}
 
-		idx := int((r.CreatedAt - dayStart) / bucketSec)
-		if idx < 0 {
-			idx = 0
+			d, ok := dims[key]
+			if !ok {
+				d = &dimAgg{buckets: make([]bucketAgg, numBuckets)}
+				dims[key] = d
+			}
+			d.requests++
+			d.buckets[idx].cacheTokens += parsed.CacheTokens
+			d.buckets[idx].creationTokens += parsed.CacheCreationTokens
 		}
-		if idx >= numBuckets {
-			idx = numBuckets - 1
-		}
-
-		d, ok := dims[key]
-		if !ok {
-			d = &dimAgg{buckets: make([]bucketAgg, numBuckets)}
-			dims[key] = d
-		}
-		d.requests++
-		d.buckets[idx].cacheTokens += parsed.CacheTokens
-		d.buckets[idx].creationTokens += parsed.CacheCreationTokens
 	}
 
 	// 按请求量取 Top N
