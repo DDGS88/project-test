@@ -1,8 +1,10 @@
 package store
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"tt-inspector/internal/model"
@@ -533,4 +535,144 @@ func (s *LogStore) GetUnmatchedErrorSamples(rulePatterns []string, limit int, wi
 		results = results[:limit]
 	}
 	return results, nil
+}
+
+// CacheHitRateSeries 缓存命中率折线序列（按用户或渠道）
+type CacheHitRateSeries struct {
+	Name   string     `json:"name"`
+	Values []*float64 `json:"values"` // 每个时间桶的命中率(0-100)，无数据为 null
+}
+
+// CacheHitRateResult 缓存命中率统计结果
+type CacheHitRateResult struct {
+	Date    string               `json:"date"`
+	Buckets []string             `json:"buckets"` // 时间桶标签，如 "00:00"
+	Series  []CacheHitRateSeries `json:"series"`
+}
+
+// GetCacheHitRate 统计某一天内的缓存命中率，按用户或渠道维度分组
+// 命中率 = cache_tokens / (cache_tokens + cache_creation_tokens)
+func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, bucketMinutes, topN int) (*CacheHitRateResult, error) {
+	switch dimension {
+	case "user", "channel":
+	default:
+		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
+	}
+	if bucketMinutes <= 0 {
+		bucketMinutes = 10
+	}
+	if topN <= 0 {
+		topN = 10
+	}
+
+	type logRow struct {
+		Other     string
+		Username  string
+		ChannelId int
+		CreatedAt int64
+	}
+	var rows []logRow
+	if err := s.db.Model(&model.Log{}).
+		Select("other, username, channel_id, created_at").
+		Where("created_at >= ? AND created_at < ?", dayStart, dayEnd).
+		Where("other != ''").
+		Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	bucketSec := int64(bucketMinutes * 60)
+	numBuckets := int((dayEnd - dayStart) / bucketSec)
+	if numBuckets <= 0 {
+		numBuckets = 1
+	}
+
+	// 每个维度键的请求量与每个时间桶的 token 累加
+	type bucketAgg struct {
+		cacheTokens    float64
+		creationTokens float64
+	}
+	type dimAgg struct {
+		requests int64
+		buckets  []bucketAgg
+	}
+	dims := make(map[string]*dimAgg)
+
+	for _, r := range rows {
+		var key string
+		if dimension == "user" {
+			if r.Username == "" {
+				continue
+			}
+			key = r.Username
+		} else {
+			if r.ChannelId == 0 {
+				continue
+			}
+			key = strconv.Itoa(r.ChannelId)
+		}
+
+		var parsed struct {
+			CacheTokens         float64 `json:"cache_tokens"`
+			CacheCreationTokens float64 `json:"cache_creation_tokens"`
+		}
+		if err := json.Unmarshal([]byte(r.Other), &parsed); err != nil {
+			continue
+		}
+		if parsed.CacheTokens == 0 && parsed.CacheCreationTokens == 0 {
+			continue
+		}
+
+		idx := int((r.CreatedAt - dayStart) / bucketSec)
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= numBuckets {
+			idx = numBuckets - 1
+		}
+
+		d, ok := dims[key]
+		if !ok {
+			d = &dimAgg{buckets: make([]bucketAgg, numBuckets)}
+			dims[key] = d
+		}
+		d.requests++
+		d.buckets[idx].cacheTokens += parsed.CacheTokens
+		d.buckets[idx].creationTokens += parsed.CacheCreationTokens
+	}
+
+	// 按请求量取 Top N
+	type keyWithRequests struct {
+		key      string
+		requests int64
+	}
+	ordered := make([]keyWithRequests, 0, len(dims))
+	for k, d := range dims {
+		ordered = append(ordered, keyWithRequests{k, d.requests})
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].requests > ordered[j].requests })
+	if len(ordered) > topN {
+		ordered = ordered[:topN]
+	}
+
+	buckets := make([]string, numBuckets)
+	for i := 0; i < numBuckets; i++ {
+		minutes := i * bucketMinutes
+		buckets[i] = fmt.Sprintf("%02d:%02d", minutes/60, minutes%60)
+	}
+
+	series := make([]CacheHitRateSeries, 0, len(ordered))
+	for _, item := range ordered {
+		d := dims[item.key]
+		values := make([]*float64, numBuckets)
+		for i := 0; i < numBuckets; i++ {
+			denom := d.buckets[i].cacheTokens + d.buckets[i].creationTokens
+			if denom > 0 {
+				v := d.buckets[i].cacheTokens / denom * 100
+				values[i] = &v
+			}
+		}
+		series = append(series, CacheHitRateSeries{Name: item.key, Values: values})
+	}
+
+	return &CacheHitRateResult{Buckets: buckets, Series: series}, nil
 }

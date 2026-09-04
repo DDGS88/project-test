@@ -588,3 +588,21 @@ export async function updateClassifyRule(id: number, rule: Omit<ClassifyRule, 'i
   });
   return res.data;
 }
+
+// ── 缓存命中率 ──
+
+export interface CacheHitRateSeries {
+  name: string;
+  values: (number | null)[];
+}
+
+export interface CacheHitRateResult {
+  date: string;
+  buckets: string[];
+  series: CacheHitRateSeries[];
+}
+
+export async function getCacheHitRate(dimension: 'user' | 'channel'): Promise<CacheHitRateResult> {
+  const res = await request<{ data: CacheHitRateResult }>(`/cache-hit-rate?dimension=${dimension}`);
+  return res.data;
+}

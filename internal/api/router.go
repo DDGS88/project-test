@@ -50,6 +50,7 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 
 		api.GET("/channels", channelHandler.ListChannels)
 		api.GET("/channels/with-models", channelHandler.ListChannelsWithModels)
+		api.GET("/cache-hit-rate", errorScanHandler.GetCacheHitRate)
 
 		// 错误扫描规则
 		api.GET("/error-scan", errorScanHandler.List)
