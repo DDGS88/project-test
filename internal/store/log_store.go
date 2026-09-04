@@ -545,25 +545,31 @@ type CacheHitRateSeries struct {
 
 // CacheHitRateResult 缓存命中率统计结果
 type CacheHitRateResult struct {
-	Date    string               `json:"date"`
-	Buckets []string             `json:"buckets"` // 时间桶标签，如 "00:00"
+	Buckets []string             `json:"buckets"` // 时间桶标签，如 "09-03 23:00"
 	Series  []CacheHitRateSeries `json:"series"`
 }
 
-// GetCacheHitRate 统计某一天内的缓存命中率，按用户或渠道维度分组
-// 命中率 = cache_tokens / (cache_tokens + cache_creation_tokens)
-func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, bucketMinutes, topN int) (*CacheHitRateResult, error) {
+// GetCacheHitRate 统计最近 windowHours 小时内各用户/渠道的缓存命中率折线
+// 命中率 = cache_tokens / (cache_tokens + cache_creation_tokens)；固定输出 12 个时间桶，粒度随窗口自适应
+func (s *LogStore) GetCacheHitRate(dimension string, windowHours, topN int) (*CacheHitRateResult, error) {
 	switch dimension {
 	case "user", "channel":
 	default:
 		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
 	}
-	if bucketMinutes <= 0 {
-		bucketMinutes = 10
+	if windowHours <= 0 {
+		windowHours = 2
 	}
 	if topN <= 0 {
 		topN = 10
 	}
+	bucketMinutes := 60 * windowHours / 12 // 12 个桶，粒度随窗口自适应
+	if bucketMinutes <= 0 {
+		bucketMinutes = 5
+	}
+
+	windowEnd := time.Now().Unix()
+	windowStart := windowEnd - int64(windowHours*3600)
 
 	type logRow struct {
 		Other     string
@@ -577,7 +583,7 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 	}
 
 	bucketSec := int64(bucketMinutes * 60)
-	numBuckets := int((dayEnd - dayStart) / bucketSec)
+	numBuckets := int((windowEnd - windowStart) / bucketSec)
 	if numBuckets <= 0 {
 		numBuckets = 1
 	}
@@ -593,12 +599,12 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 	}
 	dims := make(map[string]*dimAgg)
 
-	// 按小时分批查询，逐批聚合后释放，避免一次性加载整天的日志
+	// 按小时分批查询，逐批聚合后释放，避免一次性加载整个窗口的日志
 	hourSec := int64(3600)
-	for cursor := dayStart; cursor < dayEnd; cursor += hourSec {
+	for cursor := windowStart; cursor < windowEnd; cursor += hourSec {
 		chunkEnd := cursor + hourSec
-		if chunkEnd > dayEnd {
-			chunkEnd = dayEnd
+		if chunkEnd > windowEnd {
+			chunkEnd = windowEnd
 		}
 
 		var rows []logRow
@@ -632,7 +638,7 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 				continue
 			}
 
-			idx := int((r.CreatedAt - dayStart) / bucketSec)
+			idx := int((r.CreatedAt - windowStart) / bucketSec)
 			if idx < 0 {
 				idx = 0
 			}
@@ -665,10 +671,11 @@ func (s *LogStore) GetCacheHitRate(dimension string, dayStart, dayEnd int64, buc
 		ordered = ordered[:topN]
 	}
 
+	// 时间桶标签，可能跨天，带日期前缀
 	buckets := make([]string, numBuckets)
+	startTime := time.Unix(windowStart, 0)
 	for i := 0; i < numBuckets; i++ {
-		minutes := i * bucketMinutes
-		buckets[i] = fmt.Sprintf("%02d:%02d", minutes/60, minutes%60)
+		buckets[i] = startTime.Add(time.Duration(i*bucketMinutes) * time.Minute).Format("01-02 15:04")
 	}
 
 	series := make([]CacheHitRateSeries, 0, len(ordered))

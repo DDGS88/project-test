@@ -597,13 +597,17 @@ export interface CacheHitRateSeries {
 }
 
 export interface CacheHitRateResult {
-  date: string;
   buckets: string[];
   series: CacheHitRateSeries[];
 }
 
-export async function getCacheHitRate(dimension: 'user' | 'channel'): Promise<CacheHitRateResult> {
-  const res = await request<{ data: CacheHitRateResult }>(`/cache-hit-rate?dimension=${dimension}`);
+export async function getCacheHitRate(
+  dimension: 'user' | 'channel',
+  windowHours: number
+): Promise<CacheHitRateResult> {
+  const res = await request<{ data: CacheHitRateResult }>(
+    `/cache-hit-rate?dimension=${dimension}&window=${windowHours}`
+  );
   return res.data;
 }
 

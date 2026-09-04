@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"tt-inspector/internal/engine"
 	"tt-inspector/internal/store"
@@ -629,30 +628,26 @@ func (h *ErrorScanHandler) GetGroupedSamples(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": samples})
 }
 
-// GetCacheHitRate 返回当天按用户/渠道维度的缓存命中率折线数据
+// GetCacheHitRate 返回最近 windowHours 小时内按用户/渠道维度的缓存命中率折线数据
 func (h *ErrorScanHandler) GetCacheHitRate(c *gin.Context) {
 	dimension := c.DefaultQuery("dimension", "user")
 	if dimension != "user" && dimension != "channel" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "dimension must be user or channel"})
 		return
 	}
-
-	// 以 Asia/Shanghai 计算“当天”的自然日起止（回退到服务器本地时区）
-	loc, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		loc = time.Local
+	window := 2
+	if v := c.Query("window"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 24 {
+			window = n
+		}
 	}
-	now := time.Now().In(loc)
-	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).Unix()
-	dayEnd := dayStart + 24*60*60
 
-	result, err := h.logStore.GetCacheHitRate(dimension, dayStart, dayEnd, 10, 10)
+	result, err := h.logStore.GetCacheHitRate(dimension, window, 10)
 	if err != nil {
 		h.logger.Error("get cache hit rate failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	result.Date = now.Format("2006-01-02")
 
 	// 渠道维度：将 channel_id 映射为渠道名称
 	if dimension == "channel" && h.channelStore != nil {

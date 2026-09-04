@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -22,6 +22,14 @@ const COLORS = [
   '#65a30d',
   '#9333ea',
   '#b45309',
+];
+
+const WINDOW_OPTIONS = [
+  { value: 1, label: '最近 1 小时' },
+  { value: 2, label: '最近 2 小时' },
+  { value: 6, label: '最近 6 小时' },
+  { value: 12, label: '最近 12 小时' },
+  { value: 24, label: '最近 24 小时' },
 ];
 
 function buildRows(result: CacheHitRateResult | null) {
@@ -103,44 +111,64 @@ const ChartCard: React.FC<ChartCardProps> = ({ title, subtitle, result, loading,
 };
 
 export const CacheHitRateView: React.FC = () => {
+  const [windowHours, setWindowHours] = useState(2);
   const [userData, setUserData] = useState<CacheHitRateResult | null>(null);
   const [channelData, setChannelData] = useState<CacheHitRateResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const timerRef = useRef<number | null>(null);
 
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      const [user, channel] = await Promise.all([
+        getCacheHitRate('user', windowHours),
+        getCacheHitRate('channel', windowHours),
+      ]);
+      setUserData(user);
+      setChannelData(channel);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [windowHours]);
+
+  // 初次加载 + 窗口切换
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const [user, channel] = await Promise.all([
-          getCacheHitRate('user'),
-          getCacheHitRate('channel'),
-        ]);
-        if (cancelled) return;
-        setUserData(user);
-        setChannelData(channel);
-      } catch (err: any) {
-        if (!cancelled) setError(err.message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    setLoading(true);
+    load();
+  }, [load]);
 
-  const date = userData?.date || channelData?.date || '';
+  // 每 30 秒自动刷新，反映实时滚动窗口
+  useEffect(() => {
+    timerRef.current = window.setInterval(load, 30000);
+    return () => {
+      if (timerRef.current != null) window.clearInterval(timerRef.current);
+    };
+  }, [load]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-[24px] font-bold text-[#191c1e]">缓存命中率</h2>
-        <p className="text-[14px] text-[#434655]">
-          当日（{date}）大模型缓存命中率趋势，按用户与渠道分别统计（10 分钟粒度，Top 10）。
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-[24px] font-bold text-[#191c1e]">缓存命中率</h2>
+          <p className="text-[14px] text-[#434655]">
+            各用户/渠道在滚动窗口内的缓存命中率趋势，命中率 = 缓存读取 /（缓存读取 + 缓存写入），
+            按请求量取 Top 10，每 30 秒自动刷新。
+          </p>
+        </div>
+        <select
+          value={windowHours}
+          onChange={(e) => setWindowHours(Number(e.target.value))}
+          className="border border-[#c3c6d7] rounded-lg px-3 py-1.5 text-[13px] bg-white text-[#191c1e] focus:outline-none focus:ring-2 focus:ring-[#004ac6]/30"
+        >
+          {WINDOW_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       <ChartCard
