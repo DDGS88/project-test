@@ -549,13 +549,17 @@ type CacheHitRateResult struct {
 	Series  []CacheHitRateSeries `json:"series"`
 }
 
-// GetCacheHitRate 统计最近 windowHours 小时内各用户/渠道的缓存命中率折线
+// GetCacheHitRate 统计最近 windowHours 小时内各用户/渠道/渠道内模型的缓存命中率折线
 // 命中率 = cache_tokens / (cache_tokens + cache_creation_tokens)；固定输出 12 个时间桶，粒度随窗口自适应
-func (s *LogStore) GetCacheHitRate(dimension string, windowHours, topN int) (*CacheHitRateResult, error) {
+// dimension: user | channel | model；dimension=model 时须指定 channelID，按该渠道下的模型分组
+func (s *LogStore) GetCacheHitRate(dimension string, channelID, windowHours, topN int) (*CacheHitRateResult, error) {
 	switch dimension {
-	case "user", "channel":
+	case "user", "channel", "model":
 	default:
 		return nil, fmt.Errorf("unsupported dimension: %s", dimension)
+	}
+	if dimension == "model" && channelID <= 0 {
+		return nil, fmt.Errorf("dimension model requires channel_id")
 	}
 	if windowHours <= 0 {
 		windowHours = 2
@@ -574,6 +578,7 @@ func (s *LogStore) GetCacheHitRate(dimension string, windowHours, topN int) (*Ca
 	type logRow struct {
 		Other     string
 		Username  string
+		ModelName string
 		ChannelId int
 		CreatedAt int64
 	}
@@ -607,27 +612,37 @@ func (s *LogStore) GetCacheHitRate(dimension string, windowHours, topN int) (*Ca
 			chunkEnd = windowEnd
 		}
 
-		var rows []logRow
-		if err := s.db.Model(&model.Log{}).
-			Select("other, username, channel_id, created_at").
+		q := s.db.Model(&model.Log{}).
+			Select("other, username, model_name, channel_id, created_at").
 			Where("created_at >= ? AND created_at < ?", cursor, chunkEnd).
-			Where("other != ''").
-			Scan(&rows).Error; err != nil {
+			Where("other != ''")
+		if dimension == "model" {
+			q = q.Where("channel_id = ?", channelID)
+		}
+
+		var rows []logRow
+		if err := q.Scan(&rows).Error; err != nil {
 			return nil, err
 		}
 
 		for _, r := range rows {
 			var key string
-			if dimension == "user" {
+			switch dimension {
+			case "user":
 				if r.Username == "" {
 					continue
 				}
 				key = r.Username
-			} else {
+			case "channel":
 				if r.ChannelId == 0 {
 					continue
 				}
 				key = strconv.Itoa(r.ChannelId)
+			case "model":
+				if r.ModelName == "" {
+					continue
+				}
+				key = r.ModelName
 			}
 
 			var parsed parsedCache

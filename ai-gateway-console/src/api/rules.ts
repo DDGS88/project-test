@@ -602,11 +602,13 @@ export interface CacheHitRateResult {
 }
 
 export async function getCacheHitRate(
-  dimension: 'user' | 'channel',
-  windowHours: number
+  dimension: 'user' | 'channel' | 'model',
+  windowHours: number,
+  channelId?: number
 ): Promise<CacheHitRateResult> {
+  const channelQuery = channelId != null ? `&channel_id=${channelId}` : '';
   const res = await request<{ data: CacheHitRateResult }>(
-    `/cache-hit-rate?dimension=${dimension}&window=${windowHours}`
+    `/cache-hit-rate?dimension=${dimension}&window=${windowHours}${channelQuery}`
   );
   return res.data;
 }

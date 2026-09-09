@@ -628,11 +628,19 @@ func (h *ErrorScanHandler) GetGroupedSamples(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": samples})
 }
 
-// GetCacheHitRate 返回最近 windowHours 小时内按用户/渠道维度的缓存命中率折线数据
+// GetCacheHitRate 返回最近 windowHours 小时内按用户/渠道/渠道内模型维度的缓存命中率折线数据
 func (h *ErrorScanHandler) GetCacheHitRate(c *gin.Context) {
 	dimension := c.DefaultQuery("dimension", "user")
-	if dimension != "user" && dimension != "channel" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "dimension must be user or channel"})
+	if dimension != "user" && dimension != "channel" && dimension != "model" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dimension must be user, channel or model"})
+		return
+	}
+	channelID := 0
+	if v := c.Query("channel_id"); v != "" {
+		channelID, _ = strconv.Atoi(v)
+	}
+	if dimension == "model" && channelID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dimension model requires channel_id"})
 		return
 	}
 	window := 2
@@ -642,7 +650,7 @@ func (h *ErrorScanHandler) GetCacheHitRate(c *gin.Context) {
 		}
 	}
 
-	result, err := h.logStore.GetCacheHitRate(dimension, window, 10)
+	result, err := h.logStore.GetCacheHitRate(dimension, channelID, window, 10)
 	if err != nil {
 		h.logger.Error("get cache hit rate failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
