@@ -16,7 +16,8 @@
   <h1>检测历史</h1>
   <p class="answer-capsule">
     本实例跑过的每一次检测都保存在这里,共 <strong>{{ total }}</strong> 份报告。
-    点击「查看报告」即可回到那次检测的完整 HTML 报告(分数、判定、逐项检测证据)。
+    点击「查看报告」回到那次检测的完整 HTML 报告(分数、判定、逐项检测证据);
+    点「JSON」则直接看原始报告字段 —— 排查「哪一项失败、上游返回了什么内容」时用得到。
   </p>
 </section>
 
@@ -65,7 +66,11 @@
         </td>
         <td>{{ verdict_labels.get(e.verdict, e.verdict) }}</td>
         <td class="num">{{ e.failed_count }}</td>
-        <td><a href="{{ P }}/r/{{ e.job_id }}">查看报告 →</a></td>
+        <td>
+          <a href="{{ P }}/r/{{ e.job_id }}">查看报告 →</a>
+          <a class="history-json-link" href="{{ P }}/r/{{ e.job_id }}.json"
+             title="查看这次检测的原始 JSON 报告">JSON</a>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

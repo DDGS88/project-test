@@ -553,6 +553,37 @@ async def api_result_json(job_id: str) -> JSONResponse:
     return JSONResponse(j.report)
 
 
+# NOTE: declare .json / .jpg routes BEFORE the bare /r/{job_id} HTML route.
+# Starlette path params match `[^/]+` greedily so `/r/{job_id}` would otherwise
+# swallow `/r/foo.json` (job_id="foo.json") and shadow these endpoints.
+@app.get("/r/{job_id}.json", response_class=HTMLResponse)
+async def result_json_page(request: Request, job_id: str) -> HTMLResponse:
+    """报告的原始 JSON 查看页。
+
+    HTML 报告(/r/{id})把每个探测器的结论浓缩成了对勾/叉号,排查「到底哪一项
+    失败、上游返回了什么内容」时必须看未经加工的字段 —— 这一页把落盘的报告
+    JSON 完整铺开,支持折叠、复制与下载。
+    """
+    j = await jobs.get(job_id)
+    if j is None or j.status != "done" or j.report is None:
+        raise HTTPException(status_code=404, detail="result not ready")
+
+    report_json = json.dumps(j.report, ensure_ascii=False, indent=2)
+    # 内联进 <script> 前把 < 转义掉:报告里含上游模型返回的原始文本,万一出现
+    # </script> 会提前闭合标签、把页面结构冲掉。\u003c 是合法 JSON 转义,
+    # JSON.parse 之后与原文完全一致。
+    report_json = report_json.replace("<", "\\u003c")
+    return templates.TemplateResponse(
+        request, "report_json.html",
+        {
+            "job_id": job_id,
+            "report": j.report,
+            "report_json": report_json,
+            **_seo_meta_for_report(j.report),
+        },
+    )
+
+
 # NOTE: declare .jpg route BEFORE the bare /r/{job_id} HTML route. Starlette
 # path params match `[^/]+` greedily so `/r/{job_id}` would otherwise swallow
 # `/r/foo.jpg` (job_id="foo.jpg") and shadow the image endpoint.

@@ -1056,6 +1056,22 @@ code {
   font-weight: 600;
 }
 
+/* 历史表格里的「JSON」次级入口:比「查看报告」轻,但一眼能找到 */
+.history-json-link {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.history-json-link:hover {
+  color: var(--text);
+  border-color: var(--muted);
+  text-decoration: none;
+}
+
 @media (max-width: 640px) {
   .lb-detail-summary {
     grid-template-columns: 1fr;
@@ -1816,6 +1832,113 @@ code {
   color: var(--muted);
 }
 .faq-more a { color: var(--green-dark); }
+
+/* ── 报告原始 JSON 查看页 (/r/{id}.json) ──────────────────────────────────
+   报告 JSON 动辄几十 KB,details 里塞满上游返回的原始文本,平铺出来没法读。
+   折叠成树 + 语法高亮,再看结构就快了。配色沿用页面现有的灰/绿体系。 */
+.json-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0 10px;
+}
+.json-toolbar-actions { display: flex; gap: 8px; }
+.json-toggle {
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.json-toggle:hover { color: var(--text); border-color: var(--muted); }
+
+/* 未通过项速览:点一下直接跳到 JSON 里对应的探测器 */
+.json-issues {
+  border: 1px solid #fbd5d5;
+  background: #fff7f7;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.json-issues-title { margin: 0 0 8px; font-size: 13px; }
+.json-issues-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.json-issue-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.json-issue-chip:hover { border-color: var(--muted); }
+.json-issue-fail { border-color: var(--red); color: #b91c1c; }
+.json-issue-error { border-color: var(--amber); color: #b45309; }
+
+/* JSON 树 */
+.json-root {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  padding: 6px 4px;
+  /* 这里刻意不设 overflow-x:auto。overflow-x 非 visible 会把 overflow-y 也
+     算成 auto,使 .json-root 变成滚动容器 —— 而它的高度由内容撑开、自身没有
+     可滚空间,于是嵌套节点上的 scrollIntoView 既滚不动它、window 也不再滚,
+     「点未通过项跳到对应条目」就失效了。长文本已由 .json-leaf 的
+     pre-wrap + overflow-wrap:anywhere 兜住,不需要横向滚动。 */
+}
+/* 顶部是 sticky 导航,定位过去时留出它的高度,别把目标条目压在导航下面 */
+.json-node { scroll-margin-top: 88px; }
+.json-node > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;         /* 自绘三角,避免各浏览器 marker 位置不一致 */
+}
+.json-node > summary::-webkit-details-marker { display: none; }
+.json-node > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 10px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.12s ease;
+}
+.json-node[open] > summary::before { transform: rotate(90deg); }
+.json-node > summary:hover { background: var(--bg-soft); }
+.json-brief { color: var(--muted); font-size: 12px; }
+.json-node-body {
+  margin-left: 14px;
+  padding-left: 6px;
+  border-left: 1px dashed var(--line);
+}
+.json-leaf {
+  margin: 2px 0;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.json-leaf-label { margin-right: 8px; font-weight: 600; }
+
+/* 语法高亮 */
+.json-key { color: #0f766e; font-weight: 600; }
+.json-str { color: #b45309; }
+.json-num { color: #1d4ed8; }
+.json-bool { color: #7c3aed; }
+.json-null { color: var(--muted); }
 
 /* Tablet (≤960px): TOC narrows but still sticky */
 @media (max-width: 960px) {

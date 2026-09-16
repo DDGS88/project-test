@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{# 报告原始 JSON — /r/{id} 的 HTML 报告只给结论(对勾/叉号 + 扣分项),排查
+   「到底哪一项失败了、上游返回了什么内容」时必须看未经加工的字段。这一页
+   把落盘的报告 JSON 完整铺开,可折叠、可搜索(Ctrl+F)、可复制、可下载。
+   noindex:同一份报告的 HTML 版本才是给人/爬虫看的,这里只是工具视图。 #}
+
+{% block title %}报告 JSON · {{ report.target_model or job_id }} | Veridrop{% endblock %}
+{% block description %}Veridrop 检测报告 #{{ job_id }} 的原始 JSON:每个探测器的状态、分数、详情与上游返回内容。{% endblock %}
+{% block og_title %}报告 JSON #{{ job_id }} · Veridrop{% endblock %}
+{% block og_description %}未经加工的完整检测报告字段。{% endblock %}
+{% block canonical %}https://veridrop.org/r/{{ job_id }}{% endblock %}
+{% block og_url %}https://veridrop.org/r/{{ job_id }}{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, follow" />{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="面包屑">
+  <a href="{{ P }}/">首页</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{{ P }}/history">检测历史</a>
+  <span class="breadcrumb-sep">›</span>
+  <a href="{{ P }}/r/{{ job_id }}">报告 #{{ job_id }}</a>
+  <span class="breadcrumb-sep">›</span>
+  <span class="breadcrumb-current">JSON</span>
+</nav>
+
+<section class="result-head">
+  <div>
+    <h1>报告原始 JSON</h1>
+    <p class="muted">
+      模型:<code>{{ report.target_model }}</code> ·
+      中转站:<code>{{ report.base_url }}</code> ·
+      Key:<code>{{ report.api_key_masked }}</code> ·
+      判定:<code>{{ report.verdict }}</code> ·
+      分数:<code>{{ report.total_score }}</code>
+    </p>
+  </div>
+  <div class="result-actions">
+    <a class="btn btn-ghost" href="{{ P }}/r/{{ job_id }}">← 返回报告</a>
+    <button class="btn btn-ghost" id="json-copy" type="button">复制 JSON</button>
+    <a class="btn btn-ghost" href="{{ P }}/api/result/{{ job_id }}.json"
+       download="veridrop-{{ job_id }}.json">下载 .json</a>
+  </div>
+</section>
+
+<section class="card">
+  <p class="muted small">
+    下面是这次检测落盘的<b>完整原始报告</b>。每个探测器的
+    <code>status</code>、<code>score</code>、<code>details</code>,以及上游返回的原始文本
+    (如 <code>response_text</code>、<code>evaluation</code>)都在里面 ——
+    HTML 报告只展示结论,想弄清「哪一项失败、它到底返回了什么」请看这里。
+    用 <kbd>Ctrl</kbd>+<kbd>F</kbd> 可直接在页面上搜索关键词。
+  </p>
+</section>
+
+<div class="json-toolbar">
+  <span class="muted small">共 <b id="json-top-count">0</b> 个顶层字段</span>
+  <div class="json-toolbar-actions">
+    <button class="json-toggle" id="json-expand-all" type="button">全部展开</button>
+    <button class="json-toggle" id="json-collapse-all" type="button">全部折叠</button>
+  </div>
+</div>
+
+<div id="json-issues" class="json-issues" hidden></div>
+
+<div id="json-root" class="json-root"></div>
+
+{# 报告 JSON 以 application/json 内联:JS 读取后自行渲染高亮/折叠,避免在
+   Jinja 里做 HTML 转义。服务端已把 < 转义成 \u003c,故 |safe 是安全的。 #}
+<script id="report-json" type="application/json">{{ report_json | safe }}</script>
+<script>
+(function () {
+  var rawEl = document.getElementById('report-json');
+  var root = document.getElementById('json-root');
+  if (!rawEl || !root) return;
+
+  var raw;
+  try {
+    raw = JSON.parse(rawEl.textContent);
+  } catch (err) {
+    root.textContent = '报告 JSON 解析失败: ' + err.message;
+    return;
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // JSON 语法高亮:先转义 HTML,再按 token 上色。转义只引入 &amp;/&lt;/&gt;,
+  // 不会破坏下面的字符串/数字匹配。
+  var TOKEN = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+
+  function hl(text) {
+    return esc(text).replace(TOKEN, function (m, str, colon, bool) {
+      if (str !== undefined) {
+        return colon
+          ? '<span class="json-key">' + str + '</span>' + colon
+          : '<span class="json-str">' + str + '</span>';
+      }
+      if (bool !== undefined) return '<span class="json-bool">' + m + '</span>';
+      if (/^-?\d/.test(m)) return '<span class="json-num">' + m + '</span>';
+      return '<span class="json-null">' + m + '</span>';
+    });
+  }
+
+  function isObj(v) { return v !== null && typeof v === 'object'; }
+
+  function brief(v) {
+    if (Array.isArray(v)) return '[' + v.length + ' 项]';
+    if (isObj(v)) return '{' + Object.keys(v).length + ' 个字段}';
+    if (typeof v === 'string') return esc(v.length > 60 ? v.slice(0, 60) + '…' : v);
+    return esc(String(v));
+  }
+
+  var byName = {};
+
+  function leaf(label, v) {
+    var pre = document.createElement('pre');
+    pre.className = 'json-leaf';
+    pre.innerHTML = '<span class="json-leaf-label">' + esc(label) + '</span>'
+      + hl(JSON.stringify(v));
+    return pre;
+  }
+
+  function node(label, v) {
+    if (!isObj(v)) return leaf(label, v);
+
+    var box = document.createElement('details');
+    box.className = 'json-node';
+    var sum = document.createElement('summary');
+    sum.innerHTML = '<code class="json-key">' + esc(label) + '</code>'
+      + '<span class="json-brief">' + brief(v) + '</span>';
+    box.appendChild(sum);
+
+    var body = document.createElement('div');
+    body.className = 'json-node-body';
+
+    if (Array.isArray(v)) {
+      v.forEach(function (item, i) {
+        var name = '[' + i + ']';
+        if (isObj(item) && typeof item.name === 'string') {
+          name = item.name;
+          if (item.status) name += ' · ' + item.status;
+          if (typeof item.score === 'number') name += ' · ' + item.score;
+        }
+        var child = node(name, item);
+        if (isObj(item) && typeof item.name === 'string') byName[item.name] = child;
+        body.appendChild(child);
+      });
+    } else {
+      Object.keys(v).forEach(function (k) {
+        body.appendChild(node(k, v[k]));
+      });
+    }
+
+    box.appendChild(body);
+    return box;
+  }
+
+  Object.keys(raw).forEach(function (k) {
+    var n = node(k, raw[k]);
+    // 顶层默认展开,更深一层保持折叠 —— 先看到结构,再按需钻进细节。
+    if (n.tagName === 'DETAILS') n.open = true;
+    root.appendChild(n);
+  });
+
+  document.getElementById('json-top-count').textContent = String(Object.keys(raw).length);
+
+  // ── 失败/异常项速览:直接指向 JSON 里对应的那个探测器 ──
+  var results = Array.isArray(raw.results) ? raw.results : [];
+  var problems = results.filter(function (r) {
+    return r && (r.status === 'fail' || r.status === 'error');
+  });
+
+  if (problems.length) {
+    var box = document.getElementById('json-issues');
+    var head = document.createElement('p');
+    head.className = 'json-issues-title';
+    head.innerHTML = '有 <b>' + problems.length + '</b> 项未通过,点击定位到 JSON 原文:';
+    box.appendChild(head);
+
+    var chips = document.createElement('div');
+    chips.className = 'json-issues-chips';
+    problems.forEach(function (r) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'json-issue-chip json-issue-' + esc(r.status);
+      chip.textContent = (r.display_name || r.name) + ' · ' + r.status + ' · ' + r.score;
+      chip.addEventListener('click', function () {
+        var target = byName[r.name];
+        if (!target) return;
+        target.open = true;
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      chips.appendChild(chip);
+    });
+    box.appendChild(chips);
+    box.hidden = false;
+  }
+
+  // ── 工具条 ──
+  document.getElementById('json-expand-all').addEventListener('click', function () {
+    root.querySelectorAll('details').forEach(function (d) { d.open = true; });
+  });
+  document.getElementById('json-collapse-all').addEventListener('click', function () {
+    root.querySelectorAll('details').forEach(function (d) { d.open = false; });
+  });
+
+  var copyBtn = document.getElementById('json-copy');
+  copyBtn.addEventListener('click', function () {
+    var text = JSON.stringify(raw, null, 2);
+    var done = function (ok) {
+      copyBtn.textContent = ok ? '已复制 ✓' : '复制失败,请手动选中';
+      setTimeout(function () { copyBtn.textContent = '复制 JSON'; }, 2000);
+    };
+    var fallback = function () {
+      // 非安全上下文(如 http://IP:9200)下 navigator.clipboard 不可用
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      done(ok);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    } else {
+      fallback();
+    }
+  });
+})();
+</script>
+{% endblock %}
