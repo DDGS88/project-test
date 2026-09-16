@@ -12,13 +12,14 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-const tokenExpiry = 12 * time.Hour
+// TokenExpiry 同时决定 JWT 有效期和登录 Cookie 的 Max-Age。
+const TokenExpiry = 12 * time.Hour
 
 func GenerateToken(secret, username string) (string, error) {
 	claims := Claims{
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpiry)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TokenExpiry)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

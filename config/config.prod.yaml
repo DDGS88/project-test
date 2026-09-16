@@ -31,3 +31,8 @@ logging:
 auth:
   jwt_secret: "tt-inspector-jwt-secret-change-me"   # 生产环境请更换
   admin_password: "AIGateway@2026!Admin"              # 生产环境请更换
+
+# 中转站检测（veridrop）：与 tt-inspector 同属 tt-network，按 compose 服务名访问
+veridrop:
+  enabled: true
+  upstream: "http://veridrop:8000"

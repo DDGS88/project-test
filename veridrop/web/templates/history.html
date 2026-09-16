@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{# 检测历史 — 本实例跑过的每一次检测都落盘在 JOBS_DIR,这一页把它们列出来。
+   挂在 tt-inspector 控制台时(/veridrop/history),它就是「去哪找之前的检测
+   报告」这个问题的答案:每条记录直接链到 /r/{job_id} 完整 HTML 报告。 #}
+
+{% block title %}检测历史 · 全部中转站检测报告 | Veridrop{% endblock %}
+{% block description %}本实例的全部 AI API 中转站检测记录:时间、协议、模型、分数、判定与完整报告链接一目了然,随时回看每一次检测的字段级证据。{% endblock %}
+{% block og_title %}检测历史 · Veridrop 中转站检测记录{% endblock %}
+{% block og_description %}共 {{ total }} 份检测报告,按时间倒序,点击查看完整证据。{% endblock %}
+{% block canonical %}https://veridrop.org/history{% endblock %}
+{% block og_url %}https://veridrop.org/history{% endblock %}
+
+{% block content %}
+<section class="hub-hero">
+  <h1>检测历史</h1>
+  <p class="answer-capsule">
+    本实例跑过的每一次检测都保存在这里,共 <strong>{{ total }}</strong> 份报告。
+    点击「查看报告」即可回到那次检测的完整 HTML 报告(分数、判定、逐项检测证据)。
+  </p>
+</section>
+
+<section class="lb-section-heading">
+  <h2>全部记录</h2>
+  <p class="muted small">按检测时间倒序 · 共 {{ total }} 份,当前第 {{ page }} / {{ total_pages }} 页</p>
+</section>
+
+<nav class="history-filters" aria-label="协议筛选">
+  <a class="history-filter-chip {% if not protocol %}is-active{% endif %}"
+     href="?protocol=">全部协议</a>
+  {% for key, label in protocol_labels.items() %}
+    <a class="history-filter-chip {% if protocol == key %}is-active{% endif %}"
+       href="?protocol={{ key }}">{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if entries %}
+<div class="lb-history-table-wrap">
+  <table class="lb-history-table">
+    <thead>
+      <tr>
+        <th>检测时间</th>
+        <th>协议</th>
+        <th>中转站</th>
+        <th>测试模型</th>
+        <th>模式</th>
+        <th class="num">分数</th>
+        <th>判定</th>
+        <th class="num">扣分项</th>
+        <th>报告</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ e.date_str }}</td>
+        <td>{{ protocol_labels.get(e.protocol, e.protocol) }}</td>
+        <td title="{{ e.base_url }}">{{ e.domain }}</td>
+        <td><code>{{ e.target_model }}</code></td>
+        <td>{{ e.mode }}</td>
+        <td class="num">
+          <span class="lb-history-score lb-history-score-{{ e.badge_class }}">
+            {{ "%.0f"|format(e.total_score) }}
+          </span>
+        </td>
+        <td>{{ verdict_labels.get(e.verdict, e.verdict) }}</td>
+        <td class="num">{{ e.failed_count }}</td>
+        <td><a href="{{ P }}/r/{{ e.job_id }}">查看报告 →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav class="lb-pagination" aria-label="分页">
+  {% if page > 1 %}
+    <a class="lb-page-btn" href="?protocol={{ protocol }}&page={{ page - 1 }}">← 上一页</a>
+  {% else %}
+    <span class="lb-page-btn lb-page-disabled">← 上一页</span>
+  {% endif %}
+
+  {% set window = 2 %}
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == 1 or p == total_pages or (p >= page - window and p <= page + window) %}
+      {% if p == page %}
+        <span class="lb-page-btn lb-page-current">{{ p }}</span>
+      {% else %}
+        <a class="lb-page-btn" href="?protocol={{ protocol }}&page={{ p }}">{{ p }}</a>
+      {% endif %}
+    {% elif p == page - window - 1 or p == page + window + 1 %}
+      <span class="lb-page-ellipsis">…</span>
+    {% endif %}
+  {% endfor %}
+
+  {% if page < total_pages %}
+    <a class="lb-page-btn" href="?protocol={{ protocol }}&page={{ page + 1 }}">下一页 →</a>
+  {% else %}
+    <span class="lb-page-btn lb-page-disabled">下一页 →</span>
+  {% endif %}
+</nav>
+{% endif %}
+
+{% else %}
+<section class="hub-note">
+  <p>
+    还没有检测记录。
+    <a href="{{ P }}/claude">去检测 Claude 中转站 →</a>
+    · <a href="{{ P }}/openai">OpenAI</a>
+    · <a href="{{ P }}/gemini">Gemini</a>
+  </p>
+</section>
+{% endif %}
+
+<section class="hub-note">
+  <h2>记录是怎么存的?</h2>
+  <p>
+    每次检测完成后,报告以 JSON 落盘到本服务的数据目录(<code>&lt;protocol&gt;/&lt;job_id&gt;.json</code>),
+    重启服务也不会丢。报告里的 API key 是脱敏形式(<code>sk-y7xU••••••0h</code>),
+    明文 key 只在内存里存活到检测结束。
+    JSON 接口见 <code>GET /api/jobs</code>,便于接入自己的监控或归档流程。
+  </p>
+</section>
+{% endblock %}

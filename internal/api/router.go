@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *store.ErrorScanStore, logStore *store.LogStore, classifyStore *store.ErrorClassifyStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, errorScanner *engine.ErrorScanner, logger *zap.Logger, authCfg config.AuthConfig) {
+func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *store.ErrorScanStore, logStore *store.LogStore, classifyStore *store.ErrorClassifyStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, errorScanner *engine.ErrorScanner, logger *zap.Logger, authCfg config.AuthConfig, veridropCfg config.VeridropConfig) {
 	ruleHandler := &RuleHandler{
 		store:  ruleStore,
 		engine: alertEngine,
@@ -31,6 +31,13 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 
 	// 登录接口（无需认证）
 	r.POST("/api/v1/login", LoginHandler(authCfg.JWTSecret, authCfg.AdminPassword))
+
+	// 中转站检测（veridrop）反向代理：挂在 /veridrop 下，整组用 Cookie 鉴权
+	if veridropCfg.Enabled {
+		if err := RegisterVeridropRoutes(r, veridropCfg, authCfg.JWTSecret, logger); err != nil {
+			logger.Error("failed to enable veridrop proxy", zap.Error(err))
+		}
+	}
 
 	// 需要认证的 API
 	api := r.Group("/api/v1")

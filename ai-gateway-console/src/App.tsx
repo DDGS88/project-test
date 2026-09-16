@@ -18,6 +18,7 @@ import { SettingsView } from './components/SettingsView';
 import { ErrorScanAlertsView } from './components/ErrorScanAlertsView';
 import { CacheHitRateView } from './components/CacheHitRateView';
 import { ChannelErrorRateView } from './components/ChannelErrorRateView';
+import { VeridropView } from './components/VeridropView';
 import { DocModal } from './components/DocModal';
 import { SupportModal } from './components/SupportModal';
 
@@ -371,6 +372,10 @@ export default function App() {
 
     if (activeMainTab === 'channel-error-rate') {
       return <ChannelErrorRateView />;
+    }
+
+    if (activeMainTab === 'veridrop') {
+      return <VeridropView />;
     }
 
     if (activeMainTab === 'error-scan') {

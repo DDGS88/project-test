@@ -33,3 +33,8 @@ logging:
 auth:
   jwt_secret: "tt-inspector-dev-jwt-secret-change-me"
   admin_password: "DevAdmin@2026!"
+
+# 中转站检测（veridrop）：与 tt-inspector 同属 tt-network，按 compose 服务名访问
+veridrop:
+  enabled: true
+  upstream: "http://veridrop:8000"

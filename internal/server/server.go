@@ -134,7 +134,7 @@ func Run(cfg *config.Config) error {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	api.RegisterRoutes(r, ruleStore, errorScanStore, logStore, classifyStore, channelStore, alertEngine, errorScanner, logger, cfg.Auth)
+	api.RegisterRoutes(r, ruleStore, errorScanStore, logStore, classifyStore, channelStore, alertEngine, errorScanner, logger, cfg.Auth, cfg.Veridrop)
 
 	if _, err := os.Stat("ai-gateway-console/dist"); err == nil {
 		r.Static("/assets", "ai-gateway-console/dist/assets")

@@ -1,6 +1,6 @@
 export type RuleType = 'Regex' | 'Error Rate' | 'Token' | 'Latency';
 
-export type MainTab = 'dashboard' | 'alert-rules' | 'error-scan' | 'notification-channels' | 'api-keys' | 'cache-hit-rate' | 'channel-error-rate';
+export type MainTab = 'dashboard' | 'alert-rules' | 'error-scan' | 'notification-channels' | 'api-keys' | 'cache-hit-rate' | 'channel-error-rate' | 'veridrop';
 
 export type HeaderSubTab = '规则' | '监控' | '日志' | '设置';
 

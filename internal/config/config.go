@@ -14,6 +14,16 @@ type Config struct {
 	Engine      EngineConfig   `mapstructure:"engine"`
 	Logging     LoggingConfig  `mapstructure:"logging"`
 	Auth        AuthConfig     `mapstructure:"auth"`
+	Veridrop    VeridropConfig `mapstructure:"veridrop"`
+}
+
+// VeridropConfig 中转站检测服务(veridrop,独立部署的 Python 服务)。
+// 控制台通过 /veridrop 反向代理访问它,见 internal/api/handler_veridrop.go。
+type VeridropConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	// Upstream 是 veridrop 服务地址,例如 http://127.0.0.1:8000。
+	// tt-inspector 跑在容器里时,同机服务需要用 host.docker.internal。
+	Upstream string `mapstructure:"upstream"`
 }
 
 type AuthConfig struct {
@@ -104,6 +114,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Auth.AdminPassword == "" {
 		cfg.Auth.AdminPassword = "AIGateway@2026!Admin"
+	}
+	if cfg.Veridrop.Upstream == "" {
+		cfg.Veridrop.Upstream = "http://127.0.0.1:8000"
 	}
 
 	return &cfg, nil

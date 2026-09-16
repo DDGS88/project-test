@@ -18,6 +18,11 @@ export default defineConfig(() => {
           target: 'http://localhost:9200',
           changeOrigin: true,
         },
+        // 中转站检测（veridrop）由后端反向代理，开发环境一并转发
+        '/veridrop': {
+          target: 'http://localhost:9200',
+          changeOrigin: true,
+        },
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

@@ -38,11 +38,14 @@ jobs:
       - name: Build Docker image
         run: |
           docker build -t tt-inspector:${{ steps.env.outputs.TAG }} .
+          docker build -t veridrop:${{ steps.env.outputs.TAG }} -f veridrop/Dockerfile veridrop/
 
       - name: Save image as tar
         run: |
-          docker save -o tt-inspector.tar tt-inspector:${{ steps.env.outputs.TAG }}
-          sudo chmod 644 tt-inspector.tar
+          docker save -o images.tar \
+            tt-inspector:${{ steps.env.outputs.TAG }} \
+            veridrop:${{ steps.env.outputs.TAG }}
+          sudo chmod 644 images.tar
 
       # ── 部署到开发服务器（develop 分支） ──
 
@@ -54,7 +57,7 @@ jobs:
           port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          source: "tt-inspector.tar"
+          source: "images.tar"
           target: "/opt/tt-inspector/"
 
       - name: Deploy to Dev server
@@ -66,8 +69,8 @@ jobs:
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
-            mkdir -p /opt/tt-inspector/data
-            docker load -i /opt/tt-inspector/tt-inspector.tar
+            mkdir -p /opt/tt-inspector/data /opt/tt-inspector/veridrop-data
+            docker load -i /opt/tt-inspector/images.tar
             cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
             services:
               tt-inspector:
@@ -80,6 +83,20 @@ jobs:
                   TZ: Asia/Shanghai
                 volumes:
                   - ./data:/app/data
+                depends_on:
+                  - veridrop
+                networks:
+                  - tt-network
+
+              # 中转站检测服务：不对外暴露端口，只被 tt-inspector 反向代理到 /veridrop 下
+              veridrop:
+                image: veridrop:${{ steps.env.outputs.TAG }}
+                container_name: veridrop
+                restart: unless-stopped
+                environment:
+                  TZ: Asia/Shanghai
+                volumes:
+                  - ./veridrop-data:/app/data
                 networks:
                   - tt-network
 
@@ -102,7 +119,7 @@ jobs:
           port: 22
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          source: "tt-inspector.tar"
+          source: "images.tar"
           target: "/opt/tt-inspector/"
 
       - name: Deploy to Prod server
@@ -114,8 +131,8 @@ jobs:
           username: root
           key: ${{ secrets.DEV_SERVER_SSH_KEY }}
           script: |
-            mkdir -p /opt/tt-inspector/data
-            docker load -i /opt/tt-inspector/tt-inspector.tar
+            mkdir -p /opt/tt-inspector/data /opt/tt-inspector/veridrop-data
+            docker load -i /opt/tt-inspector/images.tar
             cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
             services:
               tt-inspector:
@@ -128,6 +145,20 @@ jobs:
                   TZ: Asia/Shanghai
                 volumes:
                   - ./data:/app/data
+                depends_on:
+                  - veridrop
+                networks:
+                  - tt-network
+
+              # 中转站检测服务：不对外暴露端口，只被 tt-inspector 反向代理到 /veridrop 下
+              veridrop:
+                image: veridrop:${{ steps.env.outputs.TAG }}
+                container_name: veridrop
+                restart: unless-stopped
+                environment:
+                  TZ: Asia/Shanghai
+                volumes:
+                  - ./veridrop-data:/app/data
                 networks:
                   - tt-network
 

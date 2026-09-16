@@ -31,3 +31,9 @@ logging:
 auth:
   jwt_secret: "tt-inspector-jwt-secret-change-me"   # 生产环境请更换
   admin_password: "AIGateway@2026!Admin"              # 生产环境请更换
+
+# 中转站检测（veridrop）：控制台通过 /veridrop 反向代理到独立部署的 veridrop 服务
+# 被代理的 veridrop 启动时需要设置 VERIDROP_PREFIX=/veridrop，页面链接才会带前缀
+veridrop:
+  enabled: true
+  upstream: "http://127.0.0.1:8000"
