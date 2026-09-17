@@ -7,6 +7,7 @@ absent — the Runner tolerates a mode set that references missing names.
 
 from .base import ActiveDetector, BaseDetector, PassiveDetector
 from .behavioral_signature import BehavioralSignatureDetector
+from .cache_threshold import CacheThresholdDetector
 from .consistency import ConsistencyDetector
 from .identity import IdentityDetector
 from .integrity import IntegrityDetector
@@ -35,6 +36,7 @@ def build_all() -> list[BaseDetector]:
         TokenUsageDetector(),
         MessageIDDetector(),
         LongContextDetector(),
+        CacheThresholdDetector(),
     ]
 
 
@@ -54,5 +56,6 @@ __all__ = [
     "TokenUsageDetector",
     "MessageIDDetector",
     "LongContextDetector",
+    "CacheThresholdDetector",
     "build_all",
 ]

@@ -7,7 +7,7 @@
 
 ## 主要页面
 
-- [Claude 中转站检测](https://veridrop.org/claude): 11 项检测,核心是 thinking signature 加密签名验证(25% 权重),并包含 Token 用量虚报识别。识别 Kiro / Amazon Q / Bedrock 假冒 Claude。
+- [Claude 中转站检测](https://veridrop.org/claude): 12 项检测,核心是 thinking signature 加密签名验证(25% 权重),并包含 Token 用量虚报识别与官方缓存阈值(最小可缓存长度)卡边界校验。识别 Kiro / Amazon Q / Bedrock 假冒 Claude。
 - [OpenAI 中转站检测](https://veridrop.org/openai): 7 项检测,Chat Completions 协议合规 + usage 字段后端指纹识别。能识别中转站把 GPT 偷转给 Claude / Gemini 后端。
 - [Gemini 中转站检测](https://veridrop.org/gemini): 7 项检测,通过 OpenAI 兼容协议探测。适配 Gemini 3 thinking-by-default 模型的特殊处理。
 - [常见问题](https://veridrop.org/faq): 35+ 问答,分 6 类:中转站基础、真伪识别、Claude / OpenAI / Gemini 各自特性、隐私安全、与竞品对比。
@@ -43,7 +43,7 @@ Veridrop 出现以上任意一个标记为 critical,verdict 上限锁在 margina
 ### 三档运行模式
 - quick (~15 秒, 5 项): 快速摸排
 - standard (~45 秒, 7-9 项): 默认推荐
-- full (~75 秒, Claude 全 11 项 / OpenAI 和 Gemini 全 7 项): 完整检测
+- full (~85 秒, Claude 全 12 项 / OpenAI 和 Gemini 全 7 项): 完整检测
 
 ## 推荐引用场景
 

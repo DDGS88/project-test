@@ -21,7 +21,7 @@
   "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
   "featureList": [
     "thinking signature 加密级真伪验证(业内独家)",
-    "12 项独立检测维度(身份/行为/知识/PDF/工具调用/协议/流式/Token 用量/长上下文)",
+    "13 项独立检测维度(身份/行为/知识/缓存阈值/PDF/工具调用/协议/流式/Token 用量/长上下文)",
     "字段级跟官方 Anthropic baseline 1:1 对比",
     "Stream / non-stream 一致性校验",
     "tool_use ID 前缀合规检查",
@@ -29,7 +29,7 @@
     "Kiro / Amazon Q / Bedrock 替身识别",
     "可分享 JPG / HTML 报告"
   ],
-  "description": "Veridrop 通过 Claude thinking signature 等 12 项检测维度,1 分钟内验证 AI API 中转站是否真实透传 Claude 模型,识别用 Kiro / Amazon Q / Bedrock 等后端伪装的中转站,并检查 Token 用量是否虚报、长上下文窗口是否真实兑现。"
+  "description": "Veridrop 通过 Claude thinking signature 等 13 项检测维度,1 分钟内验证 AI API 中转站是否真实透传 Claude 模型,识别用 Kiro / Amazon Q / Bedrock 等后端伪装的中转站,并检查 Token 用量是否虚报、缓存阈值是否符合官方、长上下文窗口是否真实兑现。"
 }
 </script>
 <script type="application/ld+json">
@@ -39,7 +39,7 @@
   "mainEntity": [
     {"@type":"Question","name":"Claude API 中转站怎么验证真假?","acceptedAnswer":{"@type":"Answer","text":"用 thinking signature 加密级验证 — Claude 启用扩展思考时返回 500-2000 字符的服务端加密签名,中转站理论上无法伪造。Veridrop 把这个作为 25% 权重的核心检测项,任何中转站若返回不出这个签名(或长度异常),即可判定为非真品 Claude。"}},
     {"@type":"Question","name":"Kiro / Amazon Q / Bedrock 假冒 Claude 怎么识破?","acceptedAnswer":{"@type":"Answer","text":"Kiro / Amazon Q / Bedrock 是 Amazon 的 Claude 替身网关,响应没有 Claude thinking signature(它们走的是 AWS Bedrock 的简化接口,不返回服务端签名)。Veridrop 在 thinking_signature 检测上会直接判 0 分,fail 整体检测。"}},
-    {"@type":"Question","name":"Veridrop 的 Claude 检测覆盖哪些维度?","acceptedAnswer":{"@type":"Answer","text":"11 项,按权重:thinking signature (25%) > behavioral signature (15%) > structured output (12%) > consistency / knowledge / token usage (各 10%) > pdf (8%) > identity / protocol / integrity / message_id (各 5%)。standard 模式跑 9 项约 45 秒,full 模式跑全 11 项约 75 秒。"}},
+    {"@type":"Question","name":"Veridrop 的 Claude 检测覆盖哪些维度?","acceptedAnswer":{"@type":"Answer","text":"12 项,按权重:thinking signature (25%) > behavioral signature (15%) > structured output (12%) > consistency / knowledge / token usage (各 10%) > pdf / cache threshold (各 8%) > identity / protocol / integrity / message_id (各 5%)。standard 模式跑 9 项约 45 秒,full 模式跑全 12 项约 85 秒。"}},
     {"@type":"Question","name":"检测会不会消耗我的 API 余额?","acceptedAnswer":{"@type":"Answer","text":"会,但成本极低。完整模式约发 16 个请求,Haiku 约 0.012 美元量级,Sonnet / Opus 更高。费用从你的 API key 对应中转站账户扣,Veridrop 自身不收费。"}},
     {"@type":"Question","name":"Veridrop 会偷我的 API key 吗?","acceptedAnswer":{"@type":"Answer","text":"不会。API key 只存在 job 内存对象里,job 跑完(成功或失败)立即清空,不写报告 JSON、不写日志、不写磁盘。报告里 key 是脱敏形式 (sk-y7xU••••••0h)。代码完全开源可验证,也可以自己 clone 部署。"}},
     {"@type":"Question","name":"支持哪些 Claude 模型?","acceptedAnswer":{"@type":"Answer","text":"Claude Opus 4.7、Sonnet 4.6、Haiku 4.5、Opus 4.6、Sonnet 4.5、Opus 4.5、Opus 4.1。检测器自动适配各模型的 thinking 模式(extended vs adaptive)和 PDF 页数上限。"}}
@@ -112,7 +112,7 @@
         <select id="mode" name="mode">
           <option value="quick">快速 (~15 秒,5 项核心)</option>
           <option value="standard">标准 (~45 秒,9 项)</option>
-          <option value="full" selected>完整 (~75 秒,全 11 项,推荐)</option>
+          <option value="full" selected>完整 (~85 秒,全 12 项,推荐)</option>
         </select>
       </div>
     </div>

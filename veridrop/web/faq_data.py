@@ -174,10 +174,11 @@ FAQ_CATEGORIES: tuple[FAQCategory, ...] = (
             FAQEntry(
                 "claude-detector-coverage",
                 "Veridrop 的 Claude 检测覆盖哪些维度?",
-                "11 项,按权重:thinking signature (25%) > behavioral signature (15%) > "
-                "structured output (12%) > consistency / knowledge / token usage (各 10%) > pdf (8%) > "
+                "12 项,按权重:thinking signature (25%) > behavioral signature (15%) > "
+                "structured output (12%) > consistency / knowledge / token usage (各 10%) > "
+                "pdf / cache threshold (各 8%) > "
                 "identity / protocol / integrity / message_id (各 5%)。"
-                "standard 模式跑 9 项 ~45 秒,full 模式跑全 11 项 ~75 秒。",
+                "standard 模式跑 9 项 ~45 秒,full 模式跑全 12 项 ~85 秒。",
             ),
             FAQEntry(
                 "claude-stream-no-thinking",

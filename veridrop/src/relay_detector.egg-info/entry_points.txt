@@ -1,0 +1,3 @@
+[console_scripts]
+relay-detector = relay_detector.cli:app
+veridrop = relay_detector.cli:app

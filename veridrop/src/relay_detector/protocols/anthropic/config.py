@@ -24,6 +24,9 @@ DETECTOR_WEIGHTS: dict[str, float] = {
     "integrity": 5.0,
     "token_usage": 10.0,
     "message_id": 5.0,
+    # 官方最小可缓存长度是公开常量,且"低于阈值静默忽略"是硬语义:
+    # 自研缓存层(常见于订阅逆向)往往对不齐这条边界,是难伪装的对照点。
+    "cache_threshold": 8.0,
     # Heavy weight when it runs (context-window fraud is among the worst
     # lies). Skipped (0 effective weight) when ExecutionConfig.include_long_context
     # is False, so default full-mode runs stay cheap.
@@ -74,6 +77,13 @@ class ModelInfo:
     # 小 max_tokens 请求(token_usage 仅 16),会被思考吃空,故 client 层会为其
     # 显式补一个 thinking.type=disabled。
     thinking_on_by_default: bool = False
+    # 官方最小可缓存长度(prompt caching 阈值):被 cache_control 标记的可缓存
+    # 前缀短于此值时,官方静默忽略 —— 不报错、不写缓存。0 表示未知,相关探测器跳过。
+    min_cache_tokens: int = 0
+    # 该阈值的"可信下限"。个别模型各来源给出的值有分歧(如 opus-5 有 512 与
+    # 1024 两说),低于 floor 仍写缓存才判负;落在 [floor, min_cache_tokens)
+    # 只记疑点,避免拿错阈值冤枉真通道。
+    min_cache_tokens_floor: int = 0
 
 
 MODELS: dict[str, ModelInfo] = {
@@ -92,6 +102,9 @@ MODELS: dict[str, ModelInfo] = {
         new_tokenizer=True,
         # 官方:Opus 5 默认开启 thinking,省略 thinking 字段等于选了自适应思考。
         thinking_on_by_default=True,
+        # 阈值来源有分歧:官方/第三方整理给 512 与 1024 两种说法,取前者为可信下限。
+        min_cache_tokens=1024,
+        min_cache_tokens_floor=512,
     ),
     "claude-opus-4-8": ModelInfo(
         alias="claude-opus-4-8",
@@ -105,6 +118,7 @@ MODELS: dict[str, ModelInfo] = {
         supports_extended_thinking=False,
         supports_adaptive_thinking=True,
         new_tokenizer=True,
+        min_cache_tokens=1024,
     ),
     "claude-opus-4-7": ModelInfo(
         alias="claude-opus-4-7",
@@ -115,6 +129,9 @@ MODELS: dict[str, ModelInfo] = {
         supports_extended_thinking=False,
         supports_adaptive_thinking=True,
         new_tokenizer=True,
+        # 多数来源为 2048,个别第三方整理写 1024,故下限取 1024。
+        min_cache_tokens=2048,
+        min_cache_tokens_floor=1024,
     ),
     "claude-sonnet-4-6": ModelInfo(
         alias="claude-sonnet-4-6",
@@ -124,6 +141,9 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=600,
         supports_extended_thinking=True,
         supports_adaptive_thinking=True,
+        # 官方文档页面写 2048,第三方整理写 1024。
+        min_cache_tokens=2048,
+        min_cache_tokens_floor=1024,
     ),
     "claude-haiku-4-5": ModelInfo(
         alias="claude-haiku-4-5",
@@ -133,6 +153,7 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=100,
         supports_extended_thinking=True,
         supports_adaptive_thinking=False,
+        min_cache_tokens=4096,
     ),
     "claude-opus-4-6": ModelInfo(
         alias="claude-opus-4-6",
@@ -142,6 +163,7 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=600,
         supports_extended_thinking=True,
         supports_adaptive_thinking=False,
+        min_cache_tokens=4096,
     ),
     "claude-sonnet-4-5": ModelInfo(
         alias="claude-sonnet-4-5",
@@ -151,6 +173,7 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=100,
         supports_extended_thinking=True,
         supports_adaptive_thinking=False,
+        min_cache_tokens=1024,
     ),
     "claude-opus-4-5": ModelInfo(
         alias="claude-opus-4-5",
@@ -160,6 +183,7 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=100,
         supports_extended_thinking=True,
         supports_adaptive_thinking=False,
+        min_cache_tokens=4096,
     ),
     "claude-opus-4-1": ModelInfo(
         alias="claude-opus-4-1",
@@ -169,6 +193,7 @@ MODELS: dict[str, ModelInfo] = {
         pdf_page_max=100,
         supports_extended_thinking=True,
         supports_adaptive_thinking=False,
+        min_cache_tokens=1024,
     ),
 }
 

@@ -223,7 +223,7 @@
       <dd>检查 <code>usageMetadata</code> 是否存在、Token 统计是否自洽,以及长短文本带来的 Token 增量是否合理。</dd>
     </dl>
     {% else %}
-    <summary>12 项检测各自检查什么?</summary>
+    <summary>13 项检测各自检查什么?</summary>
     <dl class="def-list">
       <dt>身份一致性 (Identity)</dt>
       <dd>询问模型自报身份,响应必须包含 "Claude" 与 "Anthropic",且不能自称是其他品牌(如 Kiro、AWS Q 等)。</dd>
@@ -235,6 +235,8 @@
       <dd>验证 <code>response.model</code> 与请求一致,且多次调用输出长度稳定(变异系数 CV)。</dd>
       <dt>知识准确度 (Knowledge)</dt>
       <dd>5 道关于 Anthropic 公司的常识题(CEO、HQ、Constitutional AI 等),错答多则说明背后不是真 Claude。</dd>
+      <dt>缓存阈值真实性 (Cache Threshold)</dt>
+      <dd>官方 prompt caching 有最小可缓存长度(512/1024/2048/4096),低于阈值时静默不写缓存。用 <code>count_tokens</code> 把前缀精确配到「阈值 - 1」与「阈值」各发一次请求:前者不该有 <code>cache_creation_input_tokens</code>,后者应该有。自研缓存层常对不齐这条边界。</dd>
       <dt>PDF 文档识别</dt>
       <dd>提交一份 base64 PDF + magic 字符串,检查模型能否正确提取——剥离 multimodal 的中转站会失败。</dd>
       <dt>结构化输出 (Tool Use)</dt>

@@ -96,7 +96,7 @@
     还是被中转站偷偷换成了别的便宜模型。无需注册、API key 不留存、代码开源。
   </p>
   <p class="hub-meta">
-    已检测 <strong>3 个</strong>协议 · <strong>12 项</strong>独立维度 · <strong>30-75 秒</strong>出报告 · 报告 URL 永久可分享
+    已检测 <strong>3 个</strong>协议 · <strong>13 项</strong>独立维度 · <strong>30-85 秒</strong>出报告 · 报告 URL 永久可分享
   </p>
 </section>
 
@@ -115,7 +115,7 @@
       <div class="trust-icon">📜</div>
       <h3>评分算法公开</h3>
       <p>
-        12 项 detector 怎么打分、贝叶斯排名公式、tokenizer 校准 — 全在 GitHub,无黑盒。
+        13 项 detector 怎么打分、贝叶斯排名公式、tokenizer 校准 — 全在 GitHub,无黑盒。
       </p>
       <a href="https://github.com/canarybyte/veridrop/tree/main/src/relay_detector"
         target="_blank" rel="noopener" class="trust-link">查看检测器源码 →</a>
@@ -164,8 +164,9 @@
     </div>
     <h2>Claude API 中转站检测</h2>
     <p>
-      12 项检测,核心是 thinking signature 加密签名 — 这是 Anthropic 服务端真实加密产物
-      (500-2000 字符),中转站理论上无法伪造;Token 用量检查会额外识别 usage 虚报风险。
+      13 项检测,核心是 thinking signature 加密签名 — 这是 Anthropic 服务端真实加密产物
+      (500-2000 字符),中转站理论上无法伪造;Token 用量检查会额外识别 usage 虚报风险,
+      缓存阈值校验则对照官方最小可缓存长度识别自研缓存层。
     </p>
     <a class="btn btn-primary protocol-action" href="{{ P }}/claude">检测 Claude 中转站 →</a>
   </article>
