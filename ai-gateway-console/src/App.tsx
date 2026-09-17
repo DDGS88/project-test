@@ -114,9 +114,15 @@ export default function App() {
   useEffect(() => {
     if (authenticated) {
       loadRules();
+    }
+  }, [loadRules, authenticated]);
+
+  // 错误扫描规则列表体积较大，改为进入对应页签时再懒加载
+  useEffect(() => {
+    if (authenticated && activeMainTab === 'error-scan') {
       loadErrorScanRules();
     }
-  }, [loadRules, loadErrorScanRules, authenticated]);
+  }, [loadErrorScanRules, authenticated, activeMainTab]);
 
   // Sync dark mode to body
   useEffect(() => {
