@@ -3,7 +3,6 @@ name: Build & Deploy
 on:
   push:
     branches:
-      - develop
       - main
 
 jobs:
@@ -19,13 +18,8 @@ jobs:
       - name: Set environment variables
         id: env
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            ENV_NAME="prod"
-          else
-            ENV_NAME="dev"
-          fi
-          echo "ENV=$ENV_NAME" >> $GITHUB_OUTPUT
-          echo "TAG=${ENV_NAME}-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "ENV=prod" >> $GITHUB_OUTPUT
+          echo "TAG=prod-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Select environment config
         run: |
@@ -47,72 +41,9 @@ jobs:
             veridrop:${{ steps.env.outputs.TAG }}
           sudo chmod 644 images.tar
 
-      # ── 部署到开发服务器（develop 分支） ──
-
-      - name: Copy image to Dev server
-        if: github.ref == 'refs/heads/develop'
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 43.128.87.71
-          port: 22
-          username: root
-          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          source: "images.tar"
-          target: "/opt/tt-inspector/"
-
-      - name: Deploy to Dev server
-        if: github.ref == 'refs/heads/develop'
-        uses: appleboy/ssh-action@v1
-        with:
-          host: 43.128.87.71
-          port: 22
-          username: root
-          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          script: |
-            mkdir -p /opt/tt-inspector/data /opt/tt-inspector/veridrop-data
-            docker load -i /opt/tt-inspector/images.tar
-            cat > /opt/tt-inspector/docker-compose.deploy.yaml << 'COMPOSE_EOF'
-            services:
-              tt-inspector:
-                image: tt-inspector:${{ steps.env.outputs.TAG }}
-                container_name: tt-inspector
-                restart: unless-stopped
-                ports:
-                  - "9200:9200"
-                environment:
-                  TZ: Asia/Shanghai
-                volumes:
-                  - ./data:/app/data
-                depends_on:
-                  - veridrop
-                networks:
-                  - tt-network
-
-              # 中转站检测服务：不对外暴露端口，只被 tt-inspector 反向代理到 /veridrop 下
-              veridrop:
-                image: veridrop:${{ steps.env.outputs.TAG }}
-                container_name: veridrop
-                restart: unless-stopped
-                environment:
-                  TZ: Asia/Shanghai
-                volumes:
-                  - ./veridrop-data:/app/data
-                networks:
-                  - tt-network
-
-            networks:
-              tt-network:
-                driver: bridge
-            COMPOSE_EOF
-            cd /opt/tt-inspector
-            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
-            # 清理旧镜像，保留最新
-            docker image prune -f
-
       # ── 部署到生产服务器（main 分支） ──
 
       - name: Copy image to Prod server
-        if: github.ref == 'refs/heads/main'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: 43.128.87.71
@@ -123,7 +54,6 @@ jobs:
           target: "/opt/tt-inspector/"
 
       - name: Deploy to Prod server
-        if: github.ref == 'refs/heads/main'
         uses: appleboy/ssh-action@v1
         with:
           host: 43.128.87.71
