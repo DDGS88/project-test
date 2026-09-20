@@ -110,8 +110,10 @@ func Run(cfg *config.Config) error {
 	}
 
 	// 渠道探测相关表
+	// 与 scan_settings 一致：建表失败不阻断启动，避免探测表的 DDL 异常导致整个服务起不来，
+	// 此时渠道探测页面会因缺表而报错，日志里有明确记录可排查。
 	if err := logDB.AutoMigrate(&store.ProbeSetting{}, &store.ProbeRun{}, &store.ProbeResult{}); err != nil {
-		return fmt.Errorf("auto migrate probe tables: %w", err)
+		logger.Error("failed to migrate probe tables, 渠道探测功能将不可用", zap.Error(err))
 	}
 
 	// stores: rule + log 用 logDB，channel 用 businessDB
