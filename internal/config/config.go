@@ -15,6 +15,20 @@ type Config struct {
 	Logging     LoggingConfig  `mapstructure:"logging"`
 	Auth        AuthConfig     `mapstructure:"auth"`
 	Veridrop    VeridropConfig `mapstructure:"veridrop"`
+	Probe       ProbeConfig    `mapstructure:"probe"`
+}
+
+// ProbeConfig 渠道探测默认配置。
+// 具体探测参数（cron、并发、告警 webhook 等）在控制台页面调整并落库，
+// 这里只提供首次运行与重置时的默认值。
+type ProbeConfig struct {
+	AvailDefaultCron      string `mapstructure:"avail_default_cron"`
+	QualityDefaultCron    string `mapstructure:"quality_default_cron"`
+	TimeoutSec            int    `mapstructure:"timeout_sec"`
+	Concurrency           int    `mapstructure:"concurrency"`
+	QualityTimeoutSec     int    `mapstructure:"quality_timeout_sec"`
+	QualityScoreThreshold int    `mapstructure:"quality_score_threshold"`
+	CooldownSec           int    `mapstructure:"cooldown_sec"`
 }
 
 // VeridropConfig 中转站检测服务(veridrop,独立部署的 Python 服务)。
@@ -117,6 +131,27 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Veridrop.Upstream == "" {
 		cfg.Veridrop.Upstream = "http://127.0.0.1:8000"
+	}
+	if cfg.Probe.AvailDefaultCron == "" {
+		cfg.Probe.AvailDefaultCron = "0 */6 * * *"
+	}
+	if cfg.Probe.QualityDefaultCron == "" {
+		cfg.Probe.QualityDefaultCron = "0 4 * * *"
+	}
+	if cfg.Probe.TimeoutSec == 0 {
+		cfg.Probe.TimeoutSec = 15
+	}
+	if cfg.Probe.Concurrency == 0 {
+		cfg.Probe.Concurrency = 5
+	}
+	if cfg.Probe.QualityTimeoutSec == 0 {
+		cfg.Probe.QualityTimeoutSec = 300
+	}
+	if cfg.Probe.QualityScoreThreshold == 0 {
+		cfg.Probe.QualityScoreThreshold = 60
+	}
+	if cfg.Probe.CooldownSec == 0 {
+		cfg.Probe.CooldownSec = 1800
 	}
 
 	return &cfg, nil

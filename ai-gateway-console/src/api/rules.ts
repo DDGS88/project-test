@@ -1,5 +1,12 @@
 import type { AlertRule } from '../types';
 import type { ErrorScanCategory, RawGatewayLog } from '../types';
+import type {
+  ProbeAvailabilityConfig,
+  ProbeQualityConfig,
+  ProbeConfigResponse,
+  ProbeRun,
+  ProbeResult,
+} from '../types';
 
 const BASE = '/api/v1';
 
@@ -631,4 +638,94 @@ export interface ChannelErrorRateResult {
 export async function getChannelErrorRate(windowHours: number): Promise<ChannelErrorRateResult> {
   const res = await request<{ data: ChannelErrorRateResult }>(`/error-rate?window=${windowHours}`);
   return res.data;
+}
+
+// ── 渠道探测 ──
+
+// 获取探测配置（含可用性 / 质量配置与运行时状态）
+export async function getProbeConfig(): Promise<ProbeConfigResponse> {
+  const res = await request<{ data: ProbeConfigResponse }>('/probe/config');
+  return res.data;
+}
+
+// 保存可用性探测配置（body 为完整配置对象）
+export async function updateProbeAvailabilityConfig(
+  cfg: ProbeAvailabilityConfig
+): Promise<ProbeAvailabilityConfig> {
+  const res = await request<{ data: ProbeAvailabilityConfig }>('/probe/config/availability', {
+    method: 'PUT',
+    body: JSON.stringify(cfg),
+  });
+  return res.data;
+}
+
+// 保存质量探测配置（body 为完整配置对象）
+export async function updateProbeQualityConfig(
+  cfg: ProbeQualityConfig
+): Promise<ProbeQualityConfig> {
+  const res = await request<{ data: ProbeQualityConfig }>('/probe/config/quality', {
+    method: 'PUT',
+    body: JSON.stringify(cfg),
+  });
+  return res.data;
+}
+
+// 校验 cron 表达式，返回是否合法与下次运行时间
+export async function validateProbeCron(
+  cron: string
+): Promise<{ valid: boolean; next_run: string; error?: string }> {
+  const res = await request<{ data: { valid: boolean; next_run: string; error?: string } }>(
+    '/probe/validate-cron',
+    {
+      method: 'POST',
+      body: JSON.stringify({ cron }),
+    }
+  );
+  return res.data;
+}
+
+// 手动触发可用性探测（异步启动，立即返回）
+export async function triggerProbeAvailability(): Promise<void> {
+  await request('/probe/availability/run', { method: 'POST' });
+}
+
+// 手动触发质量探测（异步启动，立即返回）
+export async function triggerProbeQuality(): Promise<void> {
+  await request('/probe/quality/run', { method: 'POST' });
+}
+
+// 查询探测运行历史（按时间倒序）
+export async function listProbeRuns(
+  kind: 'availability' | 'quality',
+  limit = 20
+): Promise<ProbeRun[]> {
+  const res = await request<{ data: ProbeRun[] }>(`/probe/runs?kind=${kind}&limit=${limit}`);
+  return res.data || [];
+}
+
+// 查询探测明细，可按批次 / 类型 / 仅失败过滤
+export async function listProbeResults(params: {
+  runId?: number;
+  kind?: string;
+  onlyFailed?: boolean;
+  limit?: number;
+}): Promise<ProbeResult[]> {
+  const query = new URLSearchParams();
+  if (params.runId != null) query.set('run_id', String(params.runId));
+  if (params.kind) query.set('kind', params.kind);
+  if (params.onlyFailed) query.set('only_failed', '1');
+  if (params.limit != null) query.set('limit', String(params.limit));
+  const res = await request<{ data: ProbeResult[] }>(`/probe/results?${query.toString()}`);
+  return res.data || [];
+}
+
+// 测试飞书 webhook 是否可用
+export async function testProbeWebhook(
+  webhookUrl: string
+): Promise<{ success: boolean; error?: string }> {
+  const res = await request<{ success: boolean; error?: string }>('/probe/test-webhook', {
+    method: 'POST',
+    body: JSON.stringify({ webhook_url: webhookUrl }),
+  });
+  return res;
 }

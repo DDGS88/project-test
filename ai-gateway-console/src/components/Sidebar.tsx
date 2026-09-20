@@ -26,6 +26,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'error-scan', label: '错误日志分析告警', icon: 'error' },
     { id: 'notification-channels', label: '通知渠道配置', icon: 'hub' },
     { id: 'api-keys', label: 'API 密钥管理', icon: 'vpn_key' },
+    { id: 'channel-probe', label: '渠道探测', icon: 'network_check' },
     { id: 'veridrop', label: '中转站检测', icon: 'travel_explore' },
   ];
 

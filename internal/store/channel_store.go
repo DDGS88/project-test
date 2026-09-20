@@ -116,3 +116,80 @@ func (s *ChannelStore) GetChannelNameMap() (map[int64]string, error) {
 	}
 	return m, nil
 }
+
+// ProbeTarget 探测目标渠道：渠道凭据 + 该渠道关联模型列表
+type ProbeTarget struct {
+	ChannelId int64
+	Name      string
+	BaseUrl   string
+	Key       string
+	Status    int64
+	Models    []string
+}
+
+// channelProbeRow 探测目标查询的中间结构
+type channelProbeRow struct {
+	ChannelId int64  `gorm:"column:channel_id"`
+	Name      string `gorm:"column:name"`
+	BaseUrl   string `gorm:"column:base_url"`
+	ApiKey    string `gorm:"column:api_key"`
+	Status    int64  `gorm:"column:status"`
+	Model     string `gorm:"column:model"`
+}
+
+// ListProbeTargets 查询所有渠道的探测凭据与关联模型（应用层按渠道聚合 + 模型去重）
+//
+// 注意：channels.key 是 MySQL 保留字，直接作为列别名（AS key）会导致语法错误，
+// 因此别名统一用 api_key。
+func (s *ChannelStore) ListProbeTargets() ([]ProbeTarget, error) {
+	var rows []channelProbeRow
+	err := s.db.Raw(`
+		SELECT c.id AS channel_id,
+		       c.name AS name,
+		       COALESCE(c.base_url, '') AS base_url,
+		       COALESCE(c.key, '') AS api_key,
+		       COALESCE(c.status, 1) AS status,
+		       a.model AS model
+		FROM channels c
+		LEFT JOIN abilities a ON c.id = a.channel_id
+		ORDER BY c.id, a.model
+	`).Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	resultMap := make(map[int64]*ProbeTarget)
+	var orderedIds []int64
+	seenModels := make(map[int64]map[string]struct{})
+
+	for _, row := range rows {
+		target, exists := resultMap[row.ChannelId]
+		if !exists {
+			target = &ProbeTarget{
+				ChannelId: row.ChannelId,
+				Name:      row.Name,
+				BaseUrl:   row.BaseUrl,
+				Key:       row.ApiKey,
+				Status:    row.Status,
+				Models:    []string{},
+			}
+			resultMap[row.ChannelId] = target
+			orderedIds = append(orderedIds, row.ChannelId)
+			seenModels[row.ChannelId] = make(map[string]struct{})
+		}
+		if row.Model == "" {
+			continue
+		}
+		if _, dup := seenModels[row.ChannelId][row.Model]; dup {
+			continue
+		}
+		seenModels[row.ChannelId][row.Model] = struct{}{}
+		target.Models = append(target.Models, row.Model)
+	}
+
+	result := make([]ProbeTarget, 0, len(orderedIds))
+	for _, id := range orderedIds {
+		result = append(result, *resultMap[id])
+	}
+	return result, nil
+}

@@ -73,6 +73,10 @@ func (n *FeishuNotifier) Send(webhookURL string, msg AlertMessage) error {
 				streamLabel = "stream"
 			}
 			content += fmt.Sprintf("\n> **#%d** | 渠道: `%s` | 模型: `%s` | 类型: `%s`", i+1, s.ChannelName, s.ModelName, streamLabel)
+			if s.Detail != "" {
+				content += fmt.Sprintf("\n> %s", s.Detail)
+				continue
+			}
 			content += fmt.Sprintf("\n> Content: %s", s.MatchedValue)
 			content += fmt.Sprintf("\n> RequestID: `%s`", s.RequestID)
 		}

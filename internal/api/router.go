@@ -3,13 +3,15 @@ package api
 import (
 	"tt-inspector/internal/config"
 	"tt-inspector/internal/engine"
+	"tt-inspector/internal/notifier"
+	"tt-inspector/internal/probe"
 	"tt-inspector/internal/store"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
-func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *store.ErrorScanStore, logStore *store.LogStore, classifyStore *store.ErrorClassifyStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, errorScanner *engine.ErrorScanner, logger *zap.Logger, authCfg config.AuthConfig, veridropCfg config.VeridropConfig) {
+func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *store.ErrorScanStore, logStore *store.LogStore, classifyStore *store.ErrorClassifyStore, channelStore *store.ChannelStore, alertEngine *engine.Engine, errorScanner *engine.ErrorScanner, probeStore *store.ProbeStore, probeScheduler *probe.Scheduler, feishuNotifier notifier.Notifier, logger *zap.Logger, authCfg config.AuthConfig, veridropCfg config.VeridropConfig) {
 	ruleHandler := &RuleHandler{
 		store:  ruleStore,
 		engine: alertEngine,
@@ -27,6 +29,13 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 
 	channelHandler := &ChannelHandler{
 		store: channelStore,
+	}
+
+	probeHandler := &ProbeHandler{
+		store:     probeStore,
+		scheduler: probeScheduler,
+		notifier:  feishuNotifier,
+		logger:    logger,
 	}
 
 	// 登录接口（无需认证）
@@ -92,5 +101,16 @@ func RegisterRoutes(r *gin.Engine, ruleStore *store.RuleStore, errorScanStore *s
 		api.POST("/error-scan/classify-rules", errorScanHandler.CreateClassifyRule)
 		api.PUT("/error-scan/classify-rules/:id", errorScanHandler.UpdateClassifyRule)
 		api.DELETE("/error-scan/classify-rules/:id", errorScanHandler.DeleteClassifyRule)
+
+		// 渠道探测（可用性 + 质量）
+		api.GET("/probe/config", probeHandler.GetConfig)
+		api.PUT("/probe/config/availability", probeHandler.UpdateAvailabilityConfig)
+		api.PUT("/probe/config/quality", probeHandler.UpdateQualityConfig)
+		api.POST("/probe/validate-cron", probeHandler.ValidateCron)
+		api.POST("/probe/availability/run", probeHandler.RunAvailability)
+		api.POST("/probe/quality/run", probeHandler.RunQuality)
+		api.GET("/probe/runs", probeHandler.ListRuns)
+		api.GET("/probe/results", probeHandler.ListResults)
+		api.POST("/probe/test-webhook", probeHandler.TestWebhook)
 	}
 }

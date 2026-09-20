@@ -37,3 +37,14 @@ auth:
 veridrop:
   enabled: true
   upstream: "http://127.0.0.1:8000"
+
+# 渠道探测：可用性探测 + 质量探测（veridrop 真伪检测）
+# 这里只是首次启动/重置时的默认值，实际参数在控制台「渠道探测」页面调整并落库
+probe:
+  avail_default_cron: "0 */6 * * *"
+  quality_default_cron: "0 4 * * *"
+  timeout_sec: 15                # 可用性探测单请求超时（秒）
+  concurrency: 5                 # 可用性探测并发数
+  quality_timeout_sec: 300       # 质量探测单任务最长等待（秒）
+  quality_score_threshold: 60    # 质量探测分数告警阈值
+  cooldown_sec: 1800             # 告警冷却（秒）

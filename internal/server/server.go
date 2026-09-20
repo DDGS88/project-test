@@ -14,6 +14,7 @@ import (
 	"tt-inspector/internal/config"
 	"tt-inspector/internal/engine"
 	"tt-inspector/internal/notifier"
+	"tt-inspector/internal/probe"
 	"tt-inspector/internal/store"
 
 	"github.com/gin-contrib/cors"
@@ -108,22 +109,35 @@ func Run(cfg *config.Config) error {
 		logger.Warn("failed to migrate scan_settings table", zap.Error(err))
 	}
 
+	// 渠道探测相关表
+	if err := logDB.AutoMigrate(&store.ProbeSetting{}, &store.ProbeRun{}, &store.ProbeResult{}); err != nil {
+		return fmt.Errorf("auto migrate probe tables: %w", err)
+	}
+
 	// stores: rule + log 用 logDB，channel 用 businessDB
 	ruleStore := store.NewRuleStore(logDB)
 	errorScanStore := store.NewErrorScanStore(logDB)
 	classifyStore := store.NewErrorClassifyStore(logDB)
 	logStore := store.NewLogStore(logDB)
 	channelStore := store.NewChannelStore(businessDB)
+	probeStore := store.NewProbeStore(logDB)
 	feishuNotifier := notifier.NewFeishuNotifier(logger)
 	alertEngine := engine.NewEngine(logDB, ruleStore, logStore, feishuNotifier, cfg.Engine, logger)
 
 	errorScanner := engine.NewErrorScanner(logDB, errorScanStore, channelStore, feishuNotifier, logger,
 		cfg.Engine.ErrorScanPollInterval, cfg.Engine.DefaultCooldownSec)
 
+	// 渠道探测（可用性 + 质量）
+	availabilityProber := probe.NewAvailabilityProber(channelStore, probeStore, feishuNotifier, logger)
+	veridropClient := probe.NewVeridropClient(cfg.Veridrop.Upstream, logger)
+	qualityProber := probe.NewQualityProber(channelStore, probeStore, veridropClient, feishuNotifier, logger)
+	probeScheduler := probe.NewScheduler(probeStore, availabilityProber, qualityProber, cfg.Probe, logger)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go alertEngine.Run(ctx)
 	go errorScanner.Run(ctx)
+	probeScheduler.Start(ctx)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -148,7 +162,7 @@ func Run(cfg *config.Config) error {
 		MaxAge:           12 * time.Hour,
 	}))
 
-	api.RegisterRoutes(r, ruleStore, errorScanStore, logStore, classifyStore, channelStore, alertEngine, errorScanner, logger, cfg.Auth, cfg.Veridrop)
+	api.RegisterRoutes(r, ruleStore, errorScanStore, logStore, classifyStore, channelStore, alertEngine, errorScanner, probeStore, probeScheduler, feishuNotifier, logger, cfg.Auth, cfg.Veridrop)
 
 	if _, err := os.Stat("ai-gateway-console/dist"); err == nil {
 		r.Static("/assets", "ai-gateway-console/dist/assets")
@@ -181,6 +195,7 @@ func Run(cfg *config.Config) error {
 
 	cancel()
 	alertEngine.Shutdown()
+	probeScheduler.Stop()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()

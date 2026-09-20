@@ -24,6 +24,9 @@ type LogSampleItem struct {
 	ChannelName  string `json:"channel_name"`
 	ModelName    string `json:"model_name"`
 	IsStream     bool   `json:"is_stream"`
+	// Detail 自定义明细文案；非空时优先于 Content / RequestID 渲染，
+	// 供渠道探测等非日志类告警使用。
+	Detail string `json:"detail,omitempty"`
 }
 
 // Notifier 通知接口
