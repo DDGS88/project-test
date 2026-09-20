@@ -13,7 +13,7 @@ database:
 # 告警平台数据库（告警规则存储 + 日志查询）
 log_database:
   driver: "postgres"
-  dsn: "postgresql://root:TokenTurbo%40PSQL1@10.0.0.6:5432/new_api"
+  dsn: "postgresql://root:TokenTurbo%40PSQL1@10.0.0.15:5432/new_api"
   max_open_conns: 10
   max_idle_conns: 5
 
