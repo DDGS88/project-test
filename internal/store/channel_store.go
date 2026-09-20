@@ -118,8 +118,11 @@ func (s *ChannelStore) GetChannelNameMap() (map[int64]string, error) {
 }
 
 // ProbeTarget 探测目标渠道：渠道凭据 + 该渠道关联模型列表
+//
+// Type 为 new-api 渠道类型，用于判定探测协议（见 probe.resolveProtocol）。
 type ProbeTarget struct {
 	ChannelId int64
+	Type      int64
 	Name      string
 	BaseUrl   string
 	Key       string
@@ -129,12 +132,13 @@ type ProbeTarget struct {
 
 // channelProbeRow 探测目标查询的中间结构
 type channelProbeRow struct {
-	ChannelId int64  `gorm:"column:channel_id"`
-	Name      string `gorm:"column:name"`
-	BaseUrl   string `gorm:"column:base_url"`
-	ApiKey    string `gorm:"column:api_key"`
-	Status    int64  `gorm:"column:status"`
-	Model     string `gorm:"column:model"`
+	ChannelId   int64  `gorm:"column:channel_id"`
+	ChannelType int64  `gorm:"column:channel_type"`
+	Name        string `gorm:"column:name"`
+	BaseUrl     string `gorm:"column:base_url"`
+	ApiKey      string `gorm:"column:api_key"`
+	Status      int64  `gorm:"column:status"`
+	Model       string `gorm:"column:model"`
 }
 
 // ListProbeTargets 查询所有渠道的探测凭据与关联模型（应用层按渠道聚合 + 模型去重）
@@ -145,6 +149,7 @@ func (s *ChannelStore) ListProbeTargets() ([]ProbeTarget, error) {
 	var rows []channelProbeRow
 	err := s.db.Raw(`
 		SELECT c.id AS channel_id,
+		       COALESCE(c.type, 0) AS channel_type,
 		       c.name AS name,
 		       COALESCE(c.base_url, '') AS base_url,
 		       COALESCE(c.key, '') AS api_key,
@@ -167,6 +172,7 @@ func (s *ChannelStore) ListProbeTargets() ([]ProbeTarget, error) {
 		if !exists {
 			target = &ProbeTarget{
 				ChannelId: row.ChannelId,
+				Type:      row.ChannelType,
 				Name:      row.Name,
 				BaseUrl:   row.BaseUrl,
 				Key:       row.ApiKey,

@@ -536,6 +536,7 @@ export const ChannelProbeView: React.FC = () => {
             <tr className="text-left text-[12px] text-[#737686] border-b border-[#e0e3e5]">
               <th className="py-2 pr-3 font-medium">渠道</th>
               <th className="py-2 pr-3 font-medium">模型</th>
+              <th className="py-2 pr-3 font-medium">协议</th>
               <th className="py-2 pr-3 font-medium">状态</th>
               {isQuality ? (
                 <>
@@ -561,6 +562,15 @@ export const ChannelProbeView: React.FC = () => {
                     {r.channel_name || `#${r.channel_id}`}
                   </td>
                   <td className="py-2.5 pr-3 text-[#434655] font-mono text-[12px]">{r.model || '—'}</td>
+                  <td className="py-2.5 pr-3">
+                    {r.protocol ? (
+                      <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-[#f1f2f5] text-[#434655] font-mono">
+                        {r.protocol}
+                      </span>
+                    ) : (
+                      <span className="text-[#737686]">—</span>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-3">
                     <span className={`inline-block text-[11px] px-1.5 py-0.5 rounded ${meta.className}`}>
                       {meta.label}

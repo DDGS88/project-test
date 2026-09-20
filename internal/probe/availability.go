@@ -36,6 +36,7 @@ type AvailabilityConfig struct {
 // probeJob 单个待探测的「渠道-模型」
 type probeJob struct {
 	ChannelId   int64
+	ChannelType int64
 	ChannelName string
 	BaseUrl     string
 	Key         string
@@ -187,6 +188,7 @@ func (p *AvailabilityProber) buildJobs(targets []store.ProbeTarget, cfg Availabi
 		for _, m := range models {
 			jobs = append(jobs, probeJob{
 				ChannelId:   t.ChannelId,
+				ChannelType: t.Type,
 				ChannelName: t.Name,
 				BaseUrl:     t.BaseUrl,
 				Key:         t.Key,
@@ -238,6 +240,7 @@ func (p *AvailabilityProber) probeModel(ctx context.Context, job probeJob, cfg A
 		ChannelId:   job.ChannelId,
 		ChannelName: job.ChannelName,
 		Model:       job.Model,
+		Protocol:    resolveProtocol(job.ChannelType, job.Model),
 		ProbedAt:    time.Now(),
 	}
 
@@ -371,18 +374,18 @@ func (p *AvailabilityProber) inCooldown(cooldownSec int) bool {
 	return !p.lastAlertAt.IsZero() && time.Since(p.lastAlertAt) < time.Duration(cooldownSec)*time.Second
 }
 
-// buildProbePayload 按模型所属协议构造探测请求的 URL、请求体与请求头
+// buildProbePayload 按渠道-模型所属协议构造探测请求的 URL、请求体与请求头
 //
 // 必须按协议区分：Claude 系渠道大多只支持 Anthropic Messages（POST /v1/messages），
 // 用 OpenAI 的 /v1/chat/completions 去探测会被上游直接拒绝，导致把正常渠道误判为
-// 不可用；Gemini 走 /v1beta/models/{model}:generateContent。其余模型（含无法
-// 识别协议的）统一按 OpenAI 兼容接口处理。
+// 不可用；Gemini 走 /v1beta/models/{model}:generateContent。协议判定见 resolveProtocol，
+// 兜底为 OpenAI 兼容接口。
 func buildProbePayload(job probeJob, prompt string, maxTokens int) (string, []byte, map[string]string) {
 	key := firstKey(job.Key)
 	root := apiRoot(job.BaseUrl)
 
-	switch inferProtocol(job.Model) {
-	case "anthropic":
+	switch resolveProtocol(job.ChannelType, job.Model) {
+	case ProtocolAnthropic:
 		payload := mustJSON(map[string]interface{}{
 			"model":      job.Model,
 			"max_tokens": maxTokens,
@@ -394,7 +397,7 @@ func buildProbePayload(job probeJob, prompt string, maxTokens int) (string, []by
 			"anthropic-version": "2023-06-01",
 		}
 
-	case "gemini":
+	case ProtocolGemini:
 		payload := mustJSON(map[string]interface{}{
 			"contents": []map[string]interface{}{
 				{"parts": []map[string]string{{"text": prompt}}},

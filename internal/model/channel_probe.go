@@ -43,6 +43,7 @@ type ProbeResult struct {
 	ChannelId   int64     `gorm:"index" json:"channel_id"`
 	ChannelName string    `gorm:"type:varchar(191)" json:"channel_name"`
 	Model       string    `gorm:"type:varchar(255)" json:"model"`
+	Protocol    string    `gorm:"type:varchar(20)" json:"protocol"`     // 实际使用的探测协议：openai / anthropic / gemini
 	Status      string    `gorm:"type:varchar(16);index" json:"status"` // ok / fail / skip
 	StatusCode  int       `json:"status_code"`
 	LatencyMs   int64     `json:"latency_ms"`

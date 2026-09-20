@@ -175,12 +175,9 @@ func (p *QualityProber) probeCandidate(
 		return res
 	}
 
-	protocol := inferProtocol(pick.Model)
-	if protocol == "" {
-		res.Status = store.ProbeItemSkip
-		res.Error = "无法根据模型名推断协议，已跳过"
-		return res
-	}
+	// 渠道类型优先、模型名兜底，最终兜底 OpenAI 兼容（Kimi/DeepSeek/GLM 等第三方模型走此协议）
+	protocol := resolveProtocol(target.Type, pick.Model)
+	res.Protocol = protocol
 
 	if !p.client.Configured() {
 		res.Status = store.ProbeItemFail
@@ -352,31 +349,4 @@ func pickPerChannel(candidates []store.ProbeResult) []store.ProbeResult {
 		picks = append(picks, items[rand.Intn(len(items))])
 	}
 	return picks
-}
-
-// inferProtocol 依据模型名推断 veridrop 检测协议，无法判断时返回空字符串
-func inferProtocol(model string) string {
-	name := strings.ToLower(strings.TrimSpace(model))
-	if name == "" {
-		return ""
-	}
-	// 兼容 "openai/gpt-4o"、"anthropic/claude-3" 这类带供应商前缀的写法
-	if idx := strings.LastIndex(name, "/"); idx >= 0 {
-		name = name[idx+1:]
-	}
-
-	switch {
-	case strings.HasPrefix(name, "claude"):
-		return "anthropic"
-	case strings.HasPrefix(name, "gemini-") || strings.HasPrefix(name, "models/gemini-"):
-		return "gemini"
-	case strings.HasPrefix(name, "gpt-"),
-		strings.HasPrefix(name, "chatgpt"),
-		strings.HasPrefix(name, "o1"),
-		strings.HasPrefix(name, "o3"),
-		strings.HasPrefix(name, "o4"):
-		return "openai"
-	default:
-		return ""
-	}
 }

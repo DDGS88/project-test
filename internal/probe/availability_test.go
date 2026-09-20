@@ -50,24 +50,6 @@ func TestFirstKey(t *testing.T) {
 	}
 }
 
-func TestInferProtocol(t *testing.T) {
-	cases := map[string]string{
-		"claude-3-5-sonnet-20241022": "anthropic",
-		"anthropic/claude-opus-4":    "anthropic",
-		"gpt-4o-mini":                "openai",
-		"openai/gpt-4o":              "openai",
-		"o3-mini":                    "openai",
-		"gemini-2.5-pro":             "gemini",
-		"deepseek-chat":              "",
-		"":                           "",
-	}
-	for model, want := range cases {
-		if got := inferProtocol(model); got != want {
-			t.Errorf("inferProtocol(%q) = %q, 期望 %q", model, got, want)
-		}
-	}
-}
-
 func TestBuildProbePayloadByProtocol(t *testing.T) {
 	// Claude 系走 Anthropic Messages 协议（多数 Claude 渠道不支持 chat/completions）
 	url, body, headers := buildProbePayload(probeJob{
@@ -104,15 +86,37 @@ func TestBuildProbePayloadByProtocol(t *testing.T) {
 		t.Errorf("gemini 鉴权头不正确: %+v", headers)
 	}
 
-	// 无法识别协议的模型按 OpenAI 兼容接口处理
+	// 无法识别协议的模型（DeepSeek/Kimi/GLM 等）按 OpenAI 兼容接口处理，而不是跳过
 	url, _, headers = buildProbePayload(probeJob{
-		BaseUrl: "https://d.example.com", Key: "sk-d", Model: "deepseek-chat",
+		ChannelType: 1, BaseUrl: "https://d.example.com", Key: "sk-d", Model: "kimi-k3",
 	}, "hi", 1)
 	if url != "https://d.example.com/v1/chat/completions" {
 		t.Errorf("默认协议探测地址 = %q", url)
 	}
 	if headers["Authorization"] != "Bearer sk-d" {
 		t.Errorf("默认协议鉴权头不正确: %+v", headers)
+	}
+
+	// 渠道类型优先：type=1（OpenAI 兼容）渠道里挂着 claude 名字的模型也走 chat/completions
+	url, _, headers = buildProbePayload(probeJob{
+		ChannelType: 1, BaseUrl: "https://e.example.com", Key: "sk-e", Model: "claude-sonnet-4-6",
+	}, "hi", 1)
+	if url != "https://e.example.com/v1/chat/completions" {
+		t.Errorf("渠道类型优先时的探测地址 = %q，期望 chat/completions", url)
+	}
+	if headers["Authorization"] != "Bearer sk-e" {
+		t.Errorf("渠道类型优先时的鉴权头不正确: %+v", headers)
+	}
+
+	// 渠道类型为 Anthropic 时，即使模型名无法识别也走 Messages 协议
+	url, _, headers = buildProbePayload(probeJob{
+		ChannelType: 14, BaseUrl: "https://f.example.com", Key: "sk-f", Model: "claude-fable-5",
+	}, "hi", 1)
+	if url != "https://f.example.com/v1/messages" {
+		t.Errorf("Anthropic 渠道探测地址 = %q", url)
+	}
+	if headers["x-api-key"] != "sk-f" {
+		t.Errorf("Anthropic 渠道鉴权头不正确: %+v", headers)
 	}
 }
 

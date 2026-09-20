@@ -19,14 +19,16 @@
   - [x] SubTask 3.3: 跳过规则实现（不在白名单/非启用/缺凭据/无模型），记为 skipped 且不纳入告警
   - [x] SubTask 3.4: 运行结果落库（`ProbeRun` + `ProbeResult` 批量写入），运行结束后触发失败汇总飞书告警（按渠道聚合、含明细样本、按 `cooldown_sec` 冷却、未配置 webhook 时仅记录）
   - [x] SubTask 3.5: 支持手动触发（异步执行，不影响定时调度）
-  - [x] SubTask 3.6: 按模型协议分流探测请求（Claude 系走 Anthropic Messages `/v1/messages` + `x-api-key`/`anthropic-version`；Gemini 走 `/v1beta/models/{model}:generateContent`；其余按 OpenAI 兼容 `/chat/completions`），避免 Claude 专用中转站被误判为不可用
+  - [x] SubTask 3.6: 按渠道类型与模型协议分流探测请求（Claude 系走 Anthropic Messages `/v1/messages` + `x-api-key`/`anthropic-version`；Gemini 走 `/v1beta/models/{model}:generateContent`；其余按 OpenAI 兼容 `/chat/completions`），避免 Claude 专用中转站被误判为不可用
 
 - [x] Task 4: 质量探测器（veridrop 客户端）
   - [x] SubTask 4.1: 新建 `internal/probe/veridrop_client.go`：封装 veridrop HTTP 调用（提交检测任务 / 查询任务状态 / 拉取报告 JSON），base 地址取 `cfg.Veridrop.Upstream`
-  - [x] SubTask 4.2: 新建 `internal/probe/quality.go`：从最近一次可用性成功结果按渠道分组、每渠道随机抽 1 个模型；按模型名推断协议，无法推断则跳过
+  - [x] SubTask 4.2: 新建 `internal/probe/quality.go`：从最近一次可用性成功结果按渠道分组、每渠道随机抽 1 个模型；协议判定统一走 `internal/probe/protocol.go` 的 `resolveProtocol`（渠道类型优先 → 模型名兜底 → 兜底 OpenAI 兼容），并把实际使用的协议写入结果便于排查
   - [x] SubTask 4.3: 实现提交 + 轮询（间隔轮询直到 done/error，总耗时受 `timeout_sec` 限制），解析 `total_score`/`verdict`，结果落库
   - [x] SubTask 4.4: 低于 `score_threshold` 或检测失败时发送飞书告警（含渠道、模型、分数、结论、报告链接，按 `cooldown_sec` 冷却）；无可用性成功结果时记为跳过并说明原因
   - [x] SubTask 4.5: 支持手动触发（异步执行）
+  - [x] SubTask 4.6: 新增 `internal/probe/protocol.go` 统一协议判定：以 new-api `channels.type`（1=OpenAI 兼容、14=Anthropic、24=Gemini）为主、模型名前缀为辅，未识别的类型与模型兜底 OpenAI 兼容（Kimi/DeepSeek/GLM 等第三方模型均走 OpenAI 兼容协议），并在探测结果中记录实际使用的协议
+  - [x] SubTask 4.7: `store.ProbeTarget` 增加渠道类型字段、`ProbeResult` 增加 `protocol` 字段，前端结果明细表新增「协议」列
 
 - [x] Task 5: 探测 API 层
   - [x] SubTask 5.1: 新建 `internal/api/handler_probe.go`：`GET/PUT` 探测配置（含下次运行时间与调度状态）、cron 校验接口、手动触发接口（可用性/质量）、运行历史与结果明细查询接口、webhook 连通性测试接口

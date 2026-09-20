@@ -220,6 +220,7 @@ export interface ProbeResult {
   channel_id: number;
   channel_name: string;
   model: string;
+  protocol: string;                   // 实际使用的探测协议：openai / anthropic / gemini（跳过的记录为空）
   status: 'ok' | 'fail' | 'skip';
   status_code: number;                // 质量结果该字段为 0
   latency_ms: number;                 // 质量结果该字段为 0

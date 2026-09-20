@@ -17,9 +17,9 @@ import (
 // 注意 anthropic 的路径是 /api/detect/claude（veridrop 侧沿用历史命名），
 // 写成 /api/detect/anthropic 会 404。
 var veridropDetectPaths = map[string]string{
-	"openai":    "/api/detect/openai",
-	"anthropic": "/api/detect/claude",
-	"gemini":    "/api/detect/gemini",
+	ProtocolOpenAI:    "/api/detect/openai",
+	ProtocolAnthropic: "/api/detect/claude",
+	ProtocolGemini:    "/api/detect/gemini",
 }
 
 // veridropReportPrefix 报告页面前缀（由控制台反向代理挂载）

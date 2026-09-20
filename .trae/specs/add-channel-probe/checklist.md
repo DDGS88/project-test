@@ -20,7 +20,7 @@
 
 - [x] 探测目标为「渠道白名单 ∩ status=1 ∩ 有 base_url+key」；白名单为空时覆盖全部满足条件的渠道
 - [x] 每个目标渠道覆盖其全部模型（`max_models_per_channel`>0 时按上限截断）
-- [x] 请求地址归一化正确：OpenAI 兼容模型 `base_url` 缺 `/v1` 时自动追加，最终指向 `/chat/completions`；Claude 系走 `/v1/messages`、Gemini 走 `/v1beta/models/{model}:generateContent`
+- [x] 请求地址归一化正确：OpenAI 兼容模型 `base_url` 缺 `/v1` 时自动追加，最终指向 `/chat/completions`；Claude 系走 `/v1/messages`、Gemini 走 `/v1beta/models/{model}:generateContent`（协议由渠道类型优先决定，实测 `reachapi-claude` 渠道落库协议 `anthropic`、`test-kimi` 渠道落库协议 `openai`）
 - [x] 请求体为 `max_tokens=1`、`stream=false`、内容取自配置的 prompt（默认 `hi`）
 - [x] `key` 为多值（逗号分隔）时使用第一个非空值
 - [x] HTTP 2xx 记为成功并记录耗时；非 2xx 与网络错误/超时记为失败并记录状态码或错误原因（实测 200 → ok/1307ms；400 → fail/状态码落库）
@@ -36,7 +36,8 @@
 - [x] 质量探测使用独立 cron，且不阻塞/不依赖本次可用性探测是否刚结束
 - [x] 候选取自最近一次可用性运行的成功结果，按渠道分组、每个可用渠道随机抽 1 个模型
 - [x] 无可用性成功结果时本次运行记为跳过并说明原因，且不发送告警（运行 #6：`没有可用的可用性探测成功结果，本次质量探测已跳过`）
-- [x] 协议推断正确（claude→anthropic、gpt/o1/o3/o4/chatgpt→openai、gemini→gemini），无法推断的候选被跳过
+- [x] 协议判定正确：以渠道类型优先（new-api `channels.type` 1=OpenAI 兼容、14=Anthropic、24=Gemini），模型名前缀兜底，两者都无法判定时兜底 OpenAI 兼容（不再因无法识别而跳过）
+- [x] 第三方模型（Kimi/DeepSeek/GLM 等）不再被跳过，按 OpenAI 兼容协议提交检测（实测 `kimi-k3` 提交至 `/api/detect/openai`，协议落库为 `openai`）
 - [x] 正确调用 veridrop 提交任务、轮询状态、拉取报告 JSON 并解析 `total_score`/`verdict`（实测命中 `/api/detect/claude`，落库 score=88.5、verdict=genuine）
 - [x] 轮询总耗时受 `timeout_sec` 限制，超时记为失败并记录原因
 - [x] 分数低于 `score_threshold` 或检测失败时发送飞书告警（含渠道、模型、分数、结论、报告链接）
@@ -58,7 +59,7 @@
 - [x] 页面可用性/质量两个页签均可编辑并保存配置，保存成功后再刷新能看到新配置
 - [x] cron 输入非法时页面给出提示且不提交保存（点「保存配置」不发出 PUT 请求，仅显示行内红字与错误提示条）
 - [x] 页面展示下次预计运行时间与上次运行摘要（上次运行时间、本次状态、上次运行结果 #N 总/成功/失败/跳过）
-- [x] 页面可查看运行历史与失败明细（渠道、模型、状态码/错误原因、耗时；质量含分数与结论）
+- [x] 页面可查看运行历史与失败明细（渠道、模型、实际使用的协议、状态码/错误原因、耗时；质量含分数与结论）
 - [x] 页面可手动触发可用性与质量探测
 - [x] 页面样式与现有控制台一致（含暗色主题下颜色与图标正常）
 
