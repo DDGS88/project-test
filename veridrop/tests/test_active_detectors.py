@@ -18,6 +18,11 @@ from relay_detector.detectors.token_usage import TokenUsageDetector
 from relay_detector.protocols.anthropic.detectors.behavioral_signature import (
     _load_signatures,
 )
+from relay_detector.protocols.anthropic.client import AnthropicAPIError
+from relay_detector.protocols.anthropic.detectors.refusal_passthrough import (
+    RefusalPassthroughDetector,
+    _score_refusal,
+)
 from relay_detector.protocols.anthropic.detectors.token_usage import _delta_range
 from relay_detector.models import StreamEvent
 
@@ -263,6 +268,138 @@ def test_identity_brand_patterns_detect_amazon_q():
             hits.append(label)
     assert "Amazon Q" in hits
     assert "AWS" in hits
+
+
+# --- RefusalPassthroughDetector -------------------------------------------
+
+
+def test_refusal_official_shape_scores_full():
+    score, checks = _score_refusal(
+        "refusal",
+        {
+            "type": "refusal",
+            "category": "cyber",
+            "explanation": "This request was declined because it could enable cyber harm.",
+        },
+    )
+    assert score == 100.0
+    assert checks["stop_reason"]["pass"] is True
+    assert checks["stop_details_type"]["pass"] is True
+
+
+def test_refusal_null_category_and_explanation_is_normal():
+    # 官方:拒答不落在具名分类时 category / explanation 就是 null,
+    # 这是正常且永久的取值,不能因此扣分冤枉真通道。
+    score, _ = _score_refusal(
+        "refusal", {"type": "refusal", "category": None, "explanation": None}
+    )
+    assert score == 100.0
+
+
+def test_refusal_with_stripped_stop_details_scores_partial():
+    # 中转站只保住裸 stop_reason:形态已损坏,60 分判负。
+    score, checks = _score_refusal("refusal", None)
+    assert score == 60.0
+    assert checks["stop_details_type"]["pass"] is False
+
+
+def test_refusal_rewritten_to_end_turn_scores_zero():
+    # 中转站把拒答改写成了正常回答 —— stop_reason 不再出现。
+    score, checks = _score_refusal("end_turn", None)
+    assert score == 0.0
+    assert checks["stop_reason"]["pass"] is False
+
+
+def test_refusal_passthrough_registered_in_standard_and_full():
+    from relay_detector.config import DETECTOR_WEIGHTS, MODE_DETECTORS
+    from relay_detector.models import Mode
+
+    assert DETECTOR_WEIGHTS["refusal_passthrough"] == 8.0
+    assert "refusal_passthrough" in MODE_DETECTORS[Mode.STANDARD]
+    assert "refusal_passthrough" in MODE_DETECTORS[Mode.FULL]
+
+
+class _RefusalStubClient:
+    """非流式返回固定 response,流式按给定事件回放(用于跑通 run() 的分支)。"""
+
+    def __init__(self, non_stream=None, stream_events=None, error=None):
+        self._non_stream = non_stream
+        self._stream_events = stream_events or []
+        self._error = error
+
+    async def messages_create(self, **body):
+        if self._error is not None:
+            raise self._error
+        return body, self._non_stream or {}, {}, 0
+
+    async def messages_stream(self, **body):
+        if self._error is not None:
+            raise self._error
+        for ev in self._stream_events:
+            yield ev, 0
+
+
+def _refusal_response() -> dict:
+    return {
+        "content": [],
+        "stop_reason": "refusal",
+        "stop_details": {
+            "type": "refusal",
+            "category": "cyber",
+            "explanation": "This request was declined because it could enable cyber harm.",
+        },
+    }
+
+
+def _refusal_stream() -> list:
+    return [
+        StreamEvent(event="message_start", data={"message": {"id": "msg_1"}}),
+        StreamEvent(
+            event="message_delta",
+            data={
+                "delta": {"stop_reason": "refusal"},
+                "stop_details": {"type": "refusal", "category": "cyber"},
+            },
+        ),
+    ]
+
+
+async def test_refusal_passthrough_run_passes_when_both_paths_refuse():
+    client = _RefusalStubClient(
+        non_stream=_refusal_response(), stream_events=_refusal_stream()
+    )
+    result = await RefusalPassthroughDetector().run(client, "claude-opus-4-8")
+    assert result.status == "pass"
+    assert result.score == 100.0
+    assert sorted(result.details["refusal_paths"]) == ["non_stream", "stream"]
+
+
+async def test_refusal_passthrough_run_fails_on_end_turn_rewrite():
+    client = _RefusalStubClient(
+        non_stream={
+            "content": [{"type": "text", "text": "Here is an outline..."}],
+            "stop_reason": "end_turn",
+            "stop_details": None,
+        },
+        stream_events=[
+            StreamEvent(
+                event="message_delta",
+                data={"delta": {"stop_reason": "end_turn"}},
+            )
+        ],
+    )
+    result = await RefusalPassthroughDetector().run(client, "claude-opus-4-8")
+    assert result.status == "fail"
+    assert result.score == 0.0
+    assert result.details["refusal_paths"] == []
+
+
+async def test_refusal_passthrough_run_is_error_when_no_verdict_available():
+    # 两路都拿不到可判定响应(HTTP 4xx)→ 无法判定,不能按伪造计。
+    client = _RefusalStubClient(error=AnthropicAPIError(400, "bad request"))
+    result = await RefusalPassthroughDetector().run(client, "claude-opus-4-8")
+    assert result.status == "error"
+    assert result.score == 0.0
 
 
 def test_identity_brand_patterns_no_false_positive_on_pure_claude_response():

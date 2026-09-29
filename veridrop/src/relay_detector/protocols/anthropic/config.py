@@ -21,6 +21,10 @@ DETECTOR_WEIGHTS: dict[str, float] = {
     "pdf": 8.0,
     "structured_output": 12.0,
     "protocol": 5.0,
+    # 官方拒答是 HTTP 200 + stop_reason=refusal + stop_details(不是错误)。
+    # 中转站要么把拒答改写成 end_turn 正文,要么只留一个裸 stop_reason,
+    # 两种都在 response 语义层留下了铁证,且成本只有两条小请求。
+    "refusal_passthrough": 8.0,
     "integrity": 5.0,
     "token_usage": 10.0,
     "message_id": 5.0,
@@ -51,6 +55,7 @@ MODE_DETECTORS: dict[Mode, set[str]] = {
         "knowledge",
         "structured_output",
         "protocol",
+        "refusal_passthrough",
         "integrity",
         "token_usage",
         "message_id",

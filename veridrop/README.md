@@ -93,7 +93,7 @@ OpenAI / Gemini 没有同等级别的服务端签名机制,验证强度只到**�
 **支持**:Claude / OpenAI(Gemini 暂不支持)。
 **成本**:由你的 API key 支付 — 标准档约 $0.05–$0.50,极限档约 $0.05–$8(随模型上限)。
 
-### Claude(Anthropic)— 13 项
+### Claude(Anthropic)— 14 项
 
 > **杀手锏**:`thinking_signature` 加密签名校验 — 中转站理论上无法伪造,
 > 这是 Veridrop 唯一能给出「数学级」真伪结论的协议。
@@ -109,6 +109,7 @@ OpenAI / Gemini 没有同等级别的服务端签名机制,验证强度只到**�
 | **能力** | pdf | base64 PDF + magic string 提取 |
 | | structured_output | tool_use schema 校验(5 项子检查) |
 | **协议** | protocol | 字段、content block 类型、SSE 序列 |
+| | refusal_passthrough | 官方拒答是 200 + stop_reason=refusal + stop_details(不是错误):中转站常把拒答改写成正常回答,或只留裸 stop_reason |
 | | integrity | stream / non-stream 一致性 |
 | | message_id | id / toolu_ / srvtoolu_ 前缀校验 |
 | | token_usage | usage 字段虚报识别 |

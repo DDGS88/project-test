@@ -16,6 +16,7 @@ from .long_context import LongContextDetector
 from .message_id import MessageIDDetector
 from .pdf import PDFDetector
 from .protocol import ProtocolDetector
+from .refusal_passthrough import RefusalPassthroughDetector
 from .structured_output import StructuredOutputDetector
 from .thinking_signature import ThinkingSignatureDetector
 from .token_usage import TokenUsageDetector
@@ -32,6 +33,7 @@ def build_all() -> list[BaseDetector]:
         PDFDetector(),
         StructuredOutputDetector(),
         ProtocolDetector(),
+        RefusalPassthroughDetector(),
         IntegrityDetector(),
         TokenUsageDetector(),
         MessageIDDetector(),
@@ -52,6 +54,7 @@ __all__ = [
     "PDFDetector",
     "StructuredOutputDetector",
     "ProtocolDetector",
+    "RefusalPassthroughDetector",
     "IntegrityDetector",
     "TokenUsageDetector",
     "MessageIDDetector",

@@ -925,6 +925,7 @@ _DETECTOR_DISPLAY = {
         ("pdf", "PDF 文档识别"),
         ("structured_output", "结构化输出"),
         ("protocol", "协议规范性"),
+        ("refusal_passthrough", "拒答透传"),
         ("integrity", "响应完整性"),
         ("token_usage", "Token 用量"),
         ("message_id", "消息标识规范"),
